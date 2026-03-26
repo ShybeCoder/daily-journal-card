@@ -3,7 +3,6 @@ import {
   ArrowRight,
   CalendarHeart,
   CalendarPlus2,
-  Plus,
   Star,
   X,
 } from 'lucide-react'
@@ -25,6 +24,16 @@ const FOOD_FIELDS = [
   ['afternoonSnack', 'Afternoon snack'],
   ['dinner', 'Dinner'],
   ['eveningSnack', 'Evening snack'],
+]
+const JOURNAL_TABS = [
+  { id: 'food-water', label: 'Food + Water' },
+  { id: 'affirmations', label: 'Affirmations' },
+  { id: 'gratitude', label: 'Gratitude' },
+  { id: 'looking-forward', label: 'Looking Forward' },
+  { id: 'accomplishments', label: 'Accomplishments' },
+  { id: 'care-ailments', label: 'Self Care + Ailments' },
+  { id: 'routine', label: 'Routine' },
+  { id: 'todo', label: 'To Do' },
 ]
 
 function withTrailingBlankTask(tasks) {
@@ -119,6 +128,15 @@ function TemplateEditor({ items, onAdd, onChange, onRemove, onSave, saving, task
   )
 }
 
+function GuidedText({ prompt, examples }) {
+  return (
+    <div className="mb-4 rounded-2xl border border-white/60 bg-[var(--theme-white-80)] px-4 py-3 text-sm text-[var(--color-muted)]">
+      <p>{prompt}</p>
+      {examples ? <p className="mt-2 text-[var(--color-ink)]">{examples}</p> : null}
+    </div>
+  )
+}
+
 export default function JournalPage() {
   const navigate = useNavigate()
   const { date } = useParams()
@@ -133,6 +151,7 @@ export default function JournalPage() {
   const [todoDraft, setTodoDraft] = useState([])
   const [templateBusy, setTemplateBusy] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [activeTab, setActiveTab] = useState('food-water')
   const skipSaveRef = useRef(true)
 
   useEffect(() => {
@@ -368,7 +387,26 @@ export default function JournalPage() {
           </div>
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
+        <section className="rounded-[32px] border border-white/50 bg-[var(--theme-white-80)] p-4 shadow-[0_24px_70px_var(--theme-shadow)] backdrop-blur sm:p-5">
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {JOURNAL_TABS.map((tab) => (
+              <button
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
+                  activeTab === tab.id
+                    ? 'bg-[var(--color-sage-600)] text-white shadow-sm'
+                    : 'bg-[color:var(--theme-surface)] text-[var(--color-ink)] hover:bg-white'
+                }`}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                type="button"
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {activeTab === 'food-water' ? (
           <div className="space-y-6">
             <Section title="Food">
               <div className="grid gap-4 xl:grid-cols-2">
@@ -428,105 +466,188 @@ export default function JournalPage() {
               </div>
               <p className="mt-3 text-sm text-[var(--color-muted)]">{journal.entry.waterCount * 12} ounces logged today.</p>
             </Section>
-
-            {[
-              ['lookingForwardTo', 'Looking Forward To', 'rose', 4],
-              ['affirmations', 'Affirmations', 'rose', 5],
-              ['gratitude', 'Gratitude List', 'sage', 5],
-              ['accomplishments', 'Accomplishments', 'rose', 8],
-              ['selfCare', 'Self Care', 'sage', 4],
-              ['ailments', 'Ailments', 'rose', 4],
-              ['keepInMind', 'Keep In Mind', 'sage', 6],
-            ].map(([field, label, tone, rows]) => (
-              <Section className={field === 'affirmations' || field === 'gratitude' || field === 'selfCare' || field === 'ailments' ? 'lg:col-span-1' : ''} key={field} title={label} tone={tone}>
-                <textarea className={`${AREA} ${field === 'accomplishments' ? 'min-h-[220px]' : field === 'keepInMind' ? 'min-h-[180px]' : ''}`} onChange={(event) => updateEntry(field, event.target.value)} rows={rows} value={journal.entry[field]} />
-              </Section>
-            ))}
           </div>
+        ) : null}
 
+        {activeTab === 'affirmations' ? (
+          <Section title="Affirmations" tone="rose">
+            <GuidedText
+              examples='Examples: "I am strong." "I have value."'
+              prompt="Use this space for kind things you want to remind yourself of today."
+            />
+            <textarea
+              className={AREA}
+              onChange={(event) => updateEntry('affirmations', event.target.value)}
+              placeholder={`I am strong.\nI have value.`}
+              rows={5}
+              value={journal.entry.affirmations}
+            />
+          </Section>
+        ) : null}
+
+        {activeTab === 'gratitude' ? (
+          <Section title="Gratitude List">
+            <GuidedText prompt="What are you grateful for today?" />
+            <textarea
+              className={AREA}
+              onChange={(event) => updateEntry('gratitude', event.target.value)}
+              placeholder="A person, a moment, a comfort, or even something tiny counts."
+              rows={5}
+              value={journal.entry.gratitude}
+            />
+          </Section>
+        ) : null}
+
+        {activeTab === 'looking-forward' ? (
           <div className="space-y-6">
-            <Section title="Routine">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <TimeField label="Bedtime" onChange={(value) => updateEntry('bedtime', value)} value={journal.entry.bedtime} />
-                <TimeField label="Wake up" onChange={(value) => updateEntry('wakeUpTime', value)} value={journal.entry.wakeUpTime} />
-              </div>
-
-              <div className="mt-5 space-y-3">
-                {journal.routines.length ? journal.routines.map((item) => (
-                  <label className="flex items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm" key={item.id}>
-                    <input checked={item.isDone} className="h-5 w-5 rounded border-[var(--color-sage-300)] text-[var(--color-sage-600)] focus:ring-[var(--color-sage-400)]" onChange={() => toggleList('routines', item.id)} type="checkbox" />
-                    <span className="text-sm text-[var(--color-ink)]">{item.label}</span>
-                  </label>
-                )) : <p className="rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 text-sm text-[var(--color-muted)]">No saved routine yet. Add one below.</p>}
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button className="rounded-full bg-[var(--color-sage-600)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-sage-700)]" onClick={() => setShowRoutineEditor((current) => !current)} type="button">
-                  {showRoutineEditor ? 'Hide routine editor' : 'Edit routine'}
-                </button>
-              </div>
-
-              {showRoutineEditor ? (
-                <TemplateEditor
-                  items={routineDraft}
-                  onAdd={() => setRoutineDraft((current) => [...current, { id: crypto.randomUUID(), label: '' }])}
-                  onChange={(index, field, value) => updateDraft(setRoutineDraft, index, field, value)}
-                  onRemove={(index) => setRoutineDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                  onSave={() => saveTemplates('routine')}
-                  saving={templateBusy}
-                />
-              ) : null}
+            <Section title="Looking Forward To" tone="rose">
+              <GuidedText prompt="What are you excited for in the future?" />
+              <textarea
+                className={AREA}
+                onChange={(event) => updateEntry('lookingForwardTo', event.target.value)}
+                placeholder="It can be something later today, this week, or much farther away."
+                rows={4}
+                value={journal.entry.lookingForwardTo}
+              />
             </Section>
 
-            <Section title="To Do" tone="rose">
-              <div className="space-y-3">
-                {journal.todos.length ? journal.todos.map((item) => (
-                  <label className="flex items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm" key={item.id}>
-                    <input checked={item.isDone} className="h-5 w-5 rounded border-[var(--color-sage-300)] text-[var(--color-sage-600)] focus:ring-[var(--color-sage-400)]" onChange={() => toggleList('todos', item.id)} type="checkbox" />
-                    <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                      <span className="text-sm text-[var(--color-ink)]">{item.label}</span>
-                      <span className="rounded-full bg-[var(--color-rose-100)] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted)]">{taskLabel(item)}</span>
-                    </div>
-                  </label>
-                )) : <p className="rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 text-sm text-[var(--color-muted)]">No saved tasks are due today.</p>}
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button className="rounded-full bg-[var(--color-sage-600)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-sage-700)]" onClick={() => setShowTodoEditor((current) => !current)} type="button">
-                  {showTodoEditor ? 'Hide task editor' : 'Edit saved tasks'}
-                </button>
-              </div>
-
-              {showTodoEditor ? (
-                <TemplateEditor
-                  items={todoDraft}
-                  onAdd={() => setTodoDraft((current) => [...current, { id: crypto.randomUUID(), label: '', behavior: 'daily', intervalDays: 7 }])}
-                  onChange={(index, field, value) => updateDraft(setTodoDraft, index, field, value)}
-                  onRemove={(index) => setTodoDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                  onSave={() => saveTemplates('todo')}
-                  saving={templateBusy}
-                  taskMode
-                />
-              ) : null}
-
-              <div className="mt-6 border-t border-[var(--color-rose-200)] pt-6">
-                <div>
-                  <p className="font-display text-3xl leading-none text-[var(--color-ink)]">Today only</p>
-                  <p className="mt-2 text-sm text-[var(--color-muted)]">New blank lines appear as you type so this section stays light.</p>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {journal.todayTasks.map((item, index) => (
-                    <div className="grid items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm sm:grid-cols-[24px_1fr]" key={item.id}>
-                      <input checked={item.checked} className="h-5 w-5 rounded border-[var(--color-sage-300)] text-[var(--color-sage-600)] focus:ring-[var(--color-sage-400)]" onChange={() => updateTodayTask(index, 'checked', !item.checked)} type="checkbox" />
-                      <input className="w-full border-none bg-transparent p-0 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-0" onChange={(event) => updateTodayTask(index, 'label', event.target.value)} placeholder="Write a one-time task for today" value={item.label} />
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <Section title="Keep In Mind">
+              <GuidedText prompt="Anything important you want to remember while moving through today?" />
+              <textarea
+                className={`${AREA} min-h-[180px]`}
+                onChange={(event) => updateEntry('keepInMind', event.target.value)}
+                placeholder="Notes, reminders, boundaries, or thoughts you want close by."
+                rows={6}
+                value={journal.entry.keepInMind}
+              />
             </Section>
           </div>
-        </div>
+        ) : null}
+
+        {activeTab === 'accomplishments' ? (
+          <Section title="Accomplishments" tone="rose">
+            <GuidedText prompt="Did you get out of bed today? What else have you accomplished?" />
+            <textarea
+              className={`${AREA} min-h-[220px]`}
+              onChange={(event) => updateEntry('accomplishments', event.target.value)}
+              placeholder="Big wins count. Tiny wins count too."
+              rows={8}
+              value={journal.entry.accomplishments}
+            />
+          </Section>
+        ) : null}
+
+        {activeTab === 'care-ailments' ? (
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Section title="Self Care">
+              <GuidedText prompt="How have you shown yourself love today?" />
+              <textarea
+                className={AREA}
+                onChange={(event) => updateEntry('selfCare', event.target.value)}
+                placeholder="Rest, food, boundaries, kindness, movement, quiet time, or anything else."
+                rows={4}
+                value={journal.entry.selfCare}
+              />
+            </Section>
+
+            <Section title="Ailments" tone="rose">
+              <GuidedText prompt="What problems are you facing today?" />
+              <textarea
+                className={AREA}
+                onChange={(event) => updateEntry('ailments', event.target.value)}
+                placeholder="Physical, emotional, or mental struggles all belong here."
+                rows={4}
+                value={journal.entry.ailments}
+              />
+            </Section>
+          </div>
+        ) : null}
+
+        {activeTab === 'routine' ? (
+          <Section title="Routine">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TimeField label="Bedtime" onChange={(value) => updateEntry('bedtime', value)} value={journal.entry.bedtime} />
+              <TimeField label="Wake up" onChange={(value) => updateEntry('wakeUpTime', value)} value={journal.entry.wakeUpTime} />
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {journal.routines.length ? journal.routines.map((item) => (
+                <label className="flex items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm" key={item.id}>
+                  <input checked={item.isDone} className="h-5 w-5 rounded border-[var(--color-sage-300)] text-[var(--color-sage-600)] focus:ring-[var(--color-sage-400)]" onChange={() => toggleList('routines', item.id)} type="checkbox" />
+                  <span className="text-sm text-[var(--color-ink)]">{item.label}</span>
+                </label>
+              )) : <p className="rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 text-sm text-[var(--color-muted)]">No saved routine yet. Add one below.</p>}
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button className="rounded-full bg-[var(--color-sage-600)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-sage-700)]" onClick={() => setShowRoutineEditor((current) => !current)} type="button">
+                {showRoutineEditor ? 'Hide routine editor' : 'Edit routine'}
+              </button>
+            </div>
+
+            {showRoutineEditor ? (
+              <TemplateEditor
+                items={routineDraft}
+                onAdd={() => setRoutineDraft((current) => [...current, { id: crypto.randomUUID(), label: '' }])}
+                onChange={(index, field, value) => updateDraft(setRoutineDraft, index, field, value)}
+                onRemove={(index) => setRoutineDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                onSave={() => saveTemplates('routine')}
+                saving={templateBusy}
+              />
+            ) : null}
+          </Section>
+        ) : null}
+
+        {activeTab === 'todo' ? (
+          <Section title="To Do" tone="rose">
+            <GuidedText prompt="You've got this. Remember to take breaks and be kind to yourself while you work through today's list." />
+            <div className="space-y-3">
+              {journal.todos.length ? journal.todos.map((item) => (
+                <label className="flex items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm" key={item.id}>
+                  <input checked={item.isDone} className="h-5 w-5 rounded border-[var(--color-sage-300)] text-[var(--color-sage-600)] focus:ring-[var(--color-sage-400)]" onChange={() => toggleList('todos', item.id)} type="checkbox" />
+                  <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                    <span className="text-sm text-[var(--color-ink)]">{item.label}</span>
+                    <span className="rounded-full bg-[var(--color-rose-100)] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted)]">{taskLabel(item)}</span>
+                  </div>
+                </label>
+              )) : <p className="rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 text-sm text-[var(--color-muted)]">No saved tasks are due today.</p>}
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button className="rounded-full bg-[var(--color-sage-600)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-sage-700)]" onClick={() => setShowTodoEditor((current) => !current)} type="button">
+                {showTodoEditor ? 'Hide task editor' : 'Edit saved tasks'}
+              </button>
+            </div>
+
+            {showTodoEditor ? (
+              <TemplateEditor
+                items={todoDraft}
+                onAdd={() => setTodoDraft((current) => [...current, { id: crypto.randomUUID(), label: '', behavior: 'daily', intervalDays: 7 }])}
+                onChange={(index, field, value) => updateDraft(setTodoDraft, index, field, value)}
+                onRemove={(index) => setTodoDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                onSave={() => saveTemplates('todo')}
+                saving={templateBusy}
+                taskMode
+              />
+            ) : null}
+
+            <div className="mt-6 border-t border-[var(--color-rose-200)] pt-6">
+              <div>
+                <p className="font-display text-3xl leading-none text-[var(--color-ink)]">Today only</p>
+                <p className="mt-2 text-sm text-[var(--color-muted)]">New blank lines appear as you type so this section stays light.</p>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {journal.todayTasks.map((item, index) => (
+                  <div className="grid items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm sm:grid-cols-[24px_1fr]" key={item.id}>
+                    <input checked={item.checked} className="h-5 w-5 rounded border-[var(--color-sage-300)] text-[var(--color-sage-600)] focus:ring-[var(--color-sage-400)]" onChange={() => updateTodayTask(index, 'checked', !item.checked)} type="checkbox" />
+                    <input className="w-full border-none bg-transparent p-0 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-0" onChange={(event) => updateTodayTask(index, 'label', event.target.value)} placeholder="Write a one-time task for today" value={item.label} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Section>
+        ) : null}
       </main>
     </div>
   )
