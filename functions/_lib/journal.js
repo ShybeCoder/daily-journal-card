@@ -18,12 +18,21 @@ const DEFAULT_ROUTINES = [
 ]
 
 const DEFAULT_TODOS = [
-  ['Trouble Water', 'daily'],
-  ['Litter Box', 'daily'],
-  ['Spray Bugs', 'daily'],
-  ['Laundry', 'weekly'],
-  ['Trash', 'weekly'],
-  ['Dishes', 'daily'],
+  { label: 'Trouble Water', behavior: 'daily', intervalDays: 0 },
+  { label: 'Litter Box', behavior: 'daily', intervalDays: 0 },
+  { label: 'Spray Bugs', behavior: 'daily', intervalDays: 0 },
+  { label: 'Laundry', behavior: 'weekly', intervalDays: 0 },
+  { label: 'Trash', behavior: 'weekly', intervalDays: 0 },
+  { label: 'Dishes', behavior: 'daily', intervalDays: 0 },
+]
+
+const FOOD_SLOTS = [
+  'breakfast',
+  'morningSnack',
+  'lunch',
+  'afternoonSnack',
+  'dinner',
+  'eveningSnack',
 ]
 
 function safeJson(value, fallback) {
@@ -38,27 +47,63 @@ function trimText(value, max = 5000) {
   return typeof value === 'string' ? value.slice(0, max) : ''
 }
 
-function fromDateKey(dateKey) {
+function dateFromKey(dateKey) {
   return new Date(`${dateKey}T12:00:00`)
 }
 
-function weekStart(dateKey) {
-  const date = fromDateKey(dateKey)
-  date.setDate(date.getDate() - date.getDay())
+function keyFromDate(date) {
   return date.toISOString().slice(0, 10)
+}
+
+function addDays(dateKey, amount) {
+  const date = dateFromKey(dateKey)
+  date.setDate(date.getDate() + amount)
+  return keyFromDate(date)
+}
+
+function dayDiff(first, second) {
+  return Math.floor((dateFromKey(first).getTime() - dateFromKey(second).getTime()) / 86400000)
 }
 
 function monthEnd(monthKey) {
   const date = new Date(`${monthKey}-01T12:00:00`)
   date.setMonth(date.getMonth() + 1, 0)
-  return date.toISOString().slice(0, 10)
+  return keyFromDate(date)
+}
+
+function lastDayOfMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate()
+}
+
+function occurrenceForMonth(baseDate, monthKey) {
+  const [baseYear, baseMonth, baseDay] = baseDate.split('-').map(Number)
+  const [year, month] = monthKey.split('-').map(Number)
+  if (year < baseYear || (year === baseYear && month < baseMonth)) {
+    return null
+  }
+  const day = Math.min(baseDay, lastDayOfMonth(year, month))
+  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
+}
+
+function occurrenceForYear(baseDate, year) {
+  const [baseYear, month, day] = baseDate.split('-').map(Number)
+  if (year < baseYear) {
+    return null
+  }
+  const actualDay = Math.min(day, lastDayOfMonth(year, month))
+  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${actualDay.toString().padStart(2, '0')}`
+}
+
+function defaultFoodLog() {
+  return FOOD_SLOTS.reduce((all, slot) => {
+    all[slot] = { name: '', calories: '', carbs: '', protein: '', fats: '' }
+    return all
+  }, {})
 }
 
 function defaultEntry() {
   return {
-    breakfast: '',
-    lunch: '',
-    dinner: '',
+    foodLog: defaultFoodLog(),
     lookingForwardTo: '',
     affirmations: '',
     gratitude: '',
@@ -72,25 +117,42 @@ function defaultEntry() {
   }
 }
 
+function normalizeFoodLog(value, legacy = {}) {
+  const source = value && typeof value === 'object' ? value : {}
+  const next = defaultFoodLog()
+
+  FOOD_SLOTS.forEach((slot) => {
+    const current = source[slot] && typeof source[slot] === 'object' ? source[slot] : {}
+    next[slot] = {
+      name: trimText(current.name ?? legacy[slot] ?? '', 160),
+      calories: trimText(current.calories ?? '', 12),
+      carbs: trimText(current.carbs ?? '', 12),
+      protein: trimText(current.protein ?? '', 12),
+      fats: trimText(current.fats ?? '', 12),
+    }
+  })
+
+  return next
+}
+
 function normalizeTodayTasks(value) {
   const tasks = (Array.isArray(value) ? value : []).slice(0, 24).map((task, index) => ({
-    id: typeof task?.id === 'string' && task.id.trim() ? task.id : `slot-${index + 1}`,
+    id: typeof task?.id === 'string' && task.id.trim() ? task.id : `task-${index + 1}`,
     label: trimText(task?.label ?? '', 160),
     checked: Boolean(task?.checked),
   }))
 
-  while (tasks.length < 6) {
-    tasks.push({ id: `slot-${tasks.length + 1}`, label: '', checked: false })
+  const saved = tasks.filter((task) => task.label || task.checked)
+  if (!saved.length || saved[saved.length - 1].label) {
+    saved.push({ id: `task-${saved.length + 1}`, label: '', checked: false })
   }
 
-  return tasks
+  return saved
 }
 
 function normalizeEntry(entry = {}) {
   return {
-    breakfast: trimText(entry.breakfast),
-    lunch: trimText(entry.lunch),
-    dinner: trimText(entry.dinner),
+    foodLog: normalizeFoodLog(entry.foodLog),
     lookingForwardTo: trimText(entry.lookingForwardTo),
     affirmations: trimText(entry.affirmations),
     gratitude: trimText(entry.gratitude),
@@ -112,38 +174,99 @@ function normalizeChecks(source, ids) {
   }, {})
 }
 
-function todoDone(todo, history, dateKey, currentChecks) {
-  if (todo.behavior === 'daily') return Boolean(currentChecks[todo.id])
+function normalizeReminders(value) {
+  return [...new Set((Array.isArray(value) ? value : [])
+    .map((days) => Number.parseInt(days, 10))
+    .filter((days) => Number.isInteger(days) && days > 0 && days <= 365))]
+    .sort((left, right) => left - right)
+}
+
+function occursOnDate(event, dateKey) {
+  if (event.repeat_mode === 'weekly') {
+    return dateKey >= event.event_date && dayDiff(dateKey, event.event_date) % 7 === 0
+  }
+
+  if (event.repeat_mode === 'monthly') {
+    return occurrenceForMonth(event.event_date, dateKey.slice(0, 7)) === dateKey
+  }
+
+  if (event.repeat_mode === 'yearly') {
+    return occurrenceForYear(event.event_date, Number.parseInt(dateKey.slice(0, 4), 10)) === dateKey
+  }
+
+  return event.event_date === dateKey
+}
+
+function dueTask(todo, lastDoneDate, dateKey) {
+  if (!lastDoneDate || lastDoneDate === dateKey) {
+    return true
+  }
+
+  if (todo.behavior === 'daily') {
+    return true
+  }
 
   if (todo.behavior === 'weekly') {
-    const start = weekStart(dateKey)
-    for (const row of history) {
-      if (row.entryDate < start) break
-      if (row.todoChecks[todo.id] !== undefined) return Boolean(row.todoChecks[todo.id])
-    }
-    return false
+    return dayDiff(dateKey, lastDoneDate) >= 7
   }
 
   if (todo.behavior === 'monthly') {
-    const month = dateKey.slice(0, 7)
-    for (const row of history) {
-      if (!row.entryDate.startsWith(month)) break
-      if (row.todoChecks[todo.id] !== undefined) return Boolean(row.todoChecks[todo.id])
-    }
-    return false
+    return dateKey.slice(0, 7) !== lastDoneDate.slice(0, 7)
   }
 
-  for (const row of history) {
-    if (row.todoChecks[todo.id] !== undefined) return Boolean(row.todoChecks[todo.id])
-  }
-  return false
+  const intervalDays = Math.max(1, todo.interval_days || 0)
+  return dayDiff(dateKey, lastDoneDate) >= intervalDays
 }
 
-function occurrenceForYear(eventDate, year) {
-  const [, month, day] = eventDate.split('-')
-  const date = new Date(`${year}-${month}-${day}T12:00:00`)
-  if (date.getMonth() + 1 !== Number.parseInt(month, 10)) date.setDate(0)
-  return date.toISOString().slice(0, 10)
+function taskState(todo, history, currentChecks, dateKey) {
+  if (todo.behavior === 'daily') {
+    return { isDone: Boolean(currentChecks[todo.id]), isVisible: true }
+  }
+
+  const lastDone = history.find((row) => row.todoChecks[todo.id] === true)?.entryDate ?? null
+
+  if (!lastDone) {
+    return { isDone: false, isVisible: true }
+  }
+
+  if (lastDone === dateKey) {
+    return { isDone: true, isVisible: true }
+  }
+
+  return {
+    isDone: false,
+    isVisible: dueTask(todo, lastDone, dateKey),
+  }
+}
+
+function calendarOccurrences(event, month) {
+  const start = `${month}-01`
+  const end = monthEnd(month)
+
+  if (event.repeat_mode === 'weekly') {
+    const items = []
+    let cursor = event.event_date > start ? event.event_date : start
+    while (dayDiff(cursor, event.event_date) % 7 !== 0) {
+      cursor = addDays(cursor, 1)
+    }
+    while (cursor <= end) {
+      items.push(cursor)
+      cursor = addDays(cursor, 7)
+    }
+    return items
+  }
+
+  if (event.repeat_mode === 'monthly') {
+    const occurrence = occurrenceForMonth(event.event_date, month)
+    return occurrence && occurrence >= start && occurrence <= end ? [occurrence] : []
+  }
+
+  if (event.repeat_mode === 'yearly') {
+    const occurrence = occurrenceForYear(event.event_date, Number.parseInt(month.slice(0, 4), 10))
+    return occurrence && occurrence >= start && occurrence <= end ? [occurrence] : []
+  }
+
+  return event.event_date >= start && event.event_date <= end ? [event.event_date] : []
 }
 
 export function isDateKey(value) {
@@ -175,21 +298,33 @@ export async function ensureSeedData(context, userId) {
   }
 
   if (!Number(todoCount?.count ?? 0)) {
-    DEFAULT_TODOS.forEach(([label, behavior], index) => {
+    DEFAULT_TODOS.forEach((todo, index) => {
       statements.push(
         context.env.DB.prepare(
-          `INSERT INTO todo_items (id, user_id, label, behavior, sort_order, is_active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
-        ).bind(crypto.randomUUID(), userId, label, behavior, index, now, now),
+          `INSERT INTO todo_items (id, user_id, label, behavior, interval_days, sort_order, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        ).bind(
+          crypto.randomUUID(),
+          userId,
+          todo.label,
+          todo.behavior,
+          todo.intervalDays,
+          index,
+          now,
+          now,
+        ),
       )
     })
   }
 
-  if (statements.length) await context.env.DB.batch(statements)
+  if (statements.length) {
+    await context.env.DB.batch(statements)
+  }
 }
 
 export async function getTemplates(context, userId) {
   await ensureSeedData(context, userId)
+
   const [routines, todos] = await Promise.all([
     context.env.DB.prepare(
       `SELECT id, label FROM routine_items
@@ -197,7 +332,7 @@ export async function getTemplates(context, userId) {
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
     context.env.DB.prepare(
-      `SELECT id, label, behavior FROM todo_items
+      `SELECT id, label, behavior, interval_days FROM todo_items
        WHERE user_id = ? AND is_active = 1
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
@@ -219,19 +354,21 @@ export async function loadJournalDay(context, userId, dateKey) {
        ORDER BY entry_date DESC`,
     ).bind(userId, dateKey).all(),
     context.env.DB.prepare(
-      `SELECT id, title, notes, event_date, category, repeat_yearly
+      `SELECT id, title, notes, event_date, category, repeat_mode, reminders
        FROM calendar_events
-       WHERE user_id = ?
-         AND (event_date = ? OR (repeat_yearly = 1 AND substr(event_date, 6, 5) = substr(?, 6, 5)))
-       ORDER BY category DESC, title ASC`,
-    ).bind(userId, dateKey, dateKey).all(),
+       WHERE user_id = ?`,
+    ).bind(userId).all(),
   ])
+
+  const legacyFood = {
+    breakfast: entryRow?.breakfast ?? '',
+    lunch: entryRow?.lunch ?? '',
+    dinner: entryRow?.dinner ?? '',
+  }
 
   const entry = entryRow
     ? normalizeEntry({
-        breakfast: entryRow.breakfast,
-        lunch: entryRow.lunch,
-        dinner: entryRow.dinner,
+        foodLog: safeJson(entryRow.food_log, legacyFood),
         lookingForwardTo: entryRow.looking_forward_to,
         affirmations: entryRow.affirmations,
         gratitude: entryRow.gratitude,
@@ -252,6 +389,35 @@ export async function loadJournalDay(context, userId, dateKey) {
     todoChecks: safeJson(row.todo_checks, {}),
   }))
 
+  const events = []
+  eventRows.results.forEach((event) => {
+    const reminders = normalizeReminders(safeJson(event.reminders, []))
+    if (occursOnDate(event, dateKey)) {
+      events.push({
+        id: `${event.id}-event-${dateKey}`,
+        sourceId: event.id,
+        title: event.title,
+        notes: event.notes,
+        category: event.category,
+        kind: 'event',
+      })
+    }
+    reminders.forEach((daysBefore) => {
+      const targetDate = addDays(dateKey, daysBefore)
+      if (occursOnDate(event, targetDate)) {
+        events.push({
+          id: `${event.id}-reminder-${dateKey}-${daysBefore}`,
+          sourceId: event.id,
+          title: `${event.title} coming up`,
+          notes: daysBefore === 1 ? 'Tomorrow' : `In ${daysBefore} days`,
+          category: event.category,
+          kind: 'reminder',
+          reminderDays: daysBefore,
+        })
+      }
+    })
+  })
+
   return {
     date: dateKey,
     entry,
@@ -259,19 +425,14 @@ export async function loadJournalDay(context, userId, dateKey) {
       ...item,
       isDone: Boolean(routineChecks[item.id]),
     })),
-    todos: templates.todos.map((item) => ({
-      ...item,
-      isDone: todoDone(item, history, dateKey, currentTodoChecks),
-    })),
+    todos: templates.todos
+      .map((item) => ({
+        ...item,
+        ...taskState(item, history, currentTodoChecks, dateKey),
+      }))
+      .filter((item) => item.isVisible),
     todayTasks: normalizeTodayTasks(safeJson(entryRow?.today_tasks, [])),
-    events: eventRows.results.map((event) => ({
-      id: event.id,
-      title: event.title,
-      notes: event.notes,
-      category: event.category,
-      repeatYearly: event.repeat_yearly,
-      occurrenceDate: dateKey,
-    })),
+    events: events.sort((left, right) => left.kind.localeCompare(right.kind) || left.title.localeCompare(right.title)),
   }
 }
 
@@ -287,14 +448,16 @@ export async function saveJournalDay(context, userId, dateKey, payload) {
     templates.todos.map((item) => item.id),
   )
   const now = new Date().toISOString()
+
   await context.env.DB.prepare(
     `INSERT INTO journal_entries (
-      id, user_id, entry_date, breakfast, lunch, dinner, looking_forward_to,
+      id, user_id, entry_date, food_log, breakfast, lunch, dinner, looking_forward_to,
       affirmations, gratitude, accomplishments, self_care, ailments, keep_in_mind,
       wake_up_time, bedtime, water_count, routine_checks, todo_checks, today_tasks,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, entry_date) DO UPDATE SET
+      food_log = excluded.food_log,
       breakfast = excluded.breakfast,
       lunch = excluded.lunch,
       dinner = excluded.dinner,
@@ -317,9 +480,10 @@ export async function saveJournalDay(context, userId, dateKey, payload) {
       crypto.randomUUID(),
       userId,
       dateKey,
-      entry.breakfast,
-      entry.lunch,
-      entry.dinner,
+      JSON.stringify(entry.foodLog),
+      entry.foodLog.breakfast.name,
+      entry.foodLog.lunch.name,
+      entry.foodLog.dinner.name,
       entry.lookingForwardTo,
       entry.affirmations,
       entry.gratitude,
@@ -332,7 +496,7 @@ export async function saveJournalDay(context, userId, dateKey, payload) {
       entry.waterCount,
       JSON.stringify(routineChecks),
       JSON.stringify(todoChecks),
-      JSON.stringify(normalizeTodayTasks(payload?.todayTasks)),
+      JSON.stringify(normalizeTodayTasks(payload?.todayTasks).filter((item) => item.label || item.checked)),
       now,
       now,
     )
@@ -348,7 +512,8 @@ export async function saveTemplates(context, userId, payload) {
     .map((item) => ({
       id: item.id || crypto.randomUUID(),
       label: trimText(item.label, 160).trim(),
-      behavior: ['persistent', 'daily', 'weekly', 'monthly'].includes(item.behavior) ? item.behavior : 'daily',
+      behavior: ['daily', 'weekly', 'monthly', 'interval'].includes(item.behavior) ? item.behavior : 'daily',
+      intervalDays: Math.max(1, Number.parseInt(item.intervalDays, 10) || 7),
     }))
     .filter((item) => item.label)
 
@@ -375,10 +540,16 @@ export async function saveTemplates(context, userId, payload) {
   todos.forEach((item, index) => {
     statements.push(
       context.env.DB.prepare(
-        `INSERT INTO todo_items (id, user_id, label, behavior, sort_order, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET label = excluded.label, behavior = excluded.behavior, sort_order = excluded.sort_order, is_active = 1, updated_at = excluded.updated_at`,
-      ).bind(item.id, userId, item.label, item.behavior, index, now, now),
+        `INSERT INTO todo_items (id, user_id, label, behavior, interval_days, sort_order, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           label = excluded.label,
+           behavior = excluded.behavior,
+           interval_days = excluded.interval_days,
+           sort_order = excluded.sort_order,
+           is_active = 1,
+           updated_at = excluded.updated_at`,
+      ).bind(item.id, userId, item.label, item.behavior, item.behavior === 'interval' ? item.intervalDays : 0, index, now, now),
     )
   })
 
@@ -394,7 +565,10 @@ export async function saveTemplates(context, userId, payload) {
     }
   })
 
-  if (statements.length) await context.env.DB.batch(statements)
+  if (statements.length) {
+    await context.env.DB.batch(statements)
+  }
+
   return getTemplates(context, userId)
 }
 
@@ -402,13 +576,38 @@ export function monthBounds(month) {
   return { start: `${month}-01`, end: monthEnd(month) }
 }
 
-export function mapCalendarEvent(row, month) {
+export function mapCalendarEvents(rows, month) {
+  const occurrences = []
+  rows.forEach((row) => {
+    calendarOccurrences(row, month).forEach((occurrenceDate) => {
+      occurrences.push({
+        id: row.id,
+        title: row.title,
+        notes: row.notes,
+        category: row.category,
+        repeatMode: row.repeat_mode,
+        reminders: normalizeReminders(safeJson(row.reminders, [])),
+        occurrenceDate,
+      })
+    })
+  })
+
+  return occurrences.sort((left, right) => left.occurrenceDate.localeCompare(right.occurrenceDate) || left.title.localeCompare(right.title))
+}
+
+export function normalizeEventInput(payload = {}) {
+  const category = ['birthday', 'appointment', 'event'].includes(payload.category) ? payload.category : 'event'
   return {
-    id: row.id,
-    title: row.title,
-    notes: row.notes,
-    category: row.category,
-    repeatYearly: row.repeat_yearly,
-    occurrenceDate: row.repeat_yearly ? occurrenceForYear(row.event_date, month.slice(0, 4)) : row.event_date,
+    title: trimText(payload.title, 160).trim(),
+    date: trimText(payload.date, 20),
+    notes: trimText(payload.notes, 2000),
+    category,
+    repeatMode:
+      category === 'birthday'
+        ? 'yearly'
+        : ['none', 'weekly', 'monthly', 'yearly'].includes(payload.repeatMode)
+          ? payload.repeatMode
+          : 'none',
+    reminders: normalizeReminders(payload.reminders),
   }
 }

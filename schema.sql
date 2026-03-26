@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS journal_entries (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   entry_date TEXT NOT NULL,
+  food_log TEXT NOT NULL DEFAULT '{}',
   breakfast TEXT NOT NULL DEFAULT '',
   lunch TEXT NOT NULL DEFAULT '',
   dinner TEXT NOT NULL DEFAULT '',
@@ -52,6 +53,7 @@ CREATE TABLE IF NOT EXISTS todo_items (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   label TEXT NOT NULL,
   behavior TEXT NOT NULL DEFAULT 'daily',
+  interval_days INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
@@ -65,7 +67,17 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   notes TEXT NOT NULL DEFAULT '',
   event_date TEXT NOT NULL,
   category TEXT NOT NULL DEFAULT 'event',
-  repeat_yearly INTEGER NOT NULL DEFAULT 0,
+  repeat_mode TEXT NOT NULL DEFAULT 'none',
+  reminders TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  theme_mode TEXT NOT NULL DEFAULT 'preset',
+  theme_preset TEXT NOT NULL DEFAULT 'pastel',
+  theme_config TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

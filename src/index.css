@@ -17,6 +17,18 @@
   --color-rose-200: #f2d1c9;
   --color-rose-300: #e6b6aa;
   --color-rose-500: #c97e69;
+  --color-star: #f2b63d;
+  --theme-surface: #fffaf4;
+  --theme-panel: #edf4eb;
+  --theme-panel-strong: #e7efe2;
+  --theme-header: rgba(247, 239, 225, 0.85);
+  --theme-shadow: rgba(91, 111, 87, 0.18);
+  --theme-wash-left: #f8dcc0;
+  --theme-wash-right: #dde8da;
+  --theme-wash-bottom: #f3eadb;
+  --theme-white-80: rgba(255, 250, 244, 0.82);
+  --theme-white-88: rgba(255, 250, 244, 0.88);
+  --theme-white-95: rgba(255, 250, 244, 0.95);
 }
 
 :root {
