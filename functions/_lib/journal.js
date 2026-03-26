@@ -1,4 +1,4 @@
-const DEFAULT_ROUTINES = [
+const LEGACY_STARTER_ROUTINES = [
   'Breakfast',
   'Morning Meds',
   'Brush Teeth',
@@ -17,7 +17,7 @@ const DEFAULT_ROUTINES = [
   'Last Journal',
 ]
 
-const DEFAULT_TODOS = [
+const LEGACY_STARTER_TODOS = [
   { label: 'Trouble Water', behavior: 'daily', intervalDays: 0 },
   { label: 'Litter Box', behavior: 'daily', intervalDays: 0 },
   { label: 'Spray Bugs', behavior: 'daily', intervalDays: 0 },
@@ -181,6 +181,24 @@ function normalizeReminders(value) {
     .sort((left, right) => left - right)
 }
 
+function matchesLegacyRoutines(rows) {
+  return (
+    rows.length === LEGACY_STARTER_ROUTINES.length &&
+    rows.every((row, index) => row.label === LEGACY_STARTER_ROUTINES[index])
+  )
+}
+
+function matchesLegacyTodos(rows) {
+  return (
+    rows.length === LEGACY_STARTER_TODOS.length &&
+    rows.every((row, index) => (
+      row.label === LEGACY_STARTER_TODOS[index].label &&
+      row.behavior === LEGACY_STARTER_TODOS[index].behavior &&
+      Number(row.interval_days ?? 0) === LEGACY_STARTER_TODOS[index].intervalDays
+    ))
+  )
+}
+
 function occursOnDate(event, dateKey) {
   if (event.repeat_mode === 'weekly') {
     return dateKey >= event.event_date && dayDiff(dateKey, event.event_date) % 7 === 0
@@ -278,41 +296,38 @@ export function isMonthKey(value) {
 }
 
 export async function ensureSeedData(context, userId) {
-  const [routineCount, todoCount] = await Promise.all([
-    context.env.DB.prepare('SELECT COUNT(*) AS count FROM routine_items WHERE user_id = ?').bind(userId).first(),
-    context.env.DB.prepare('SELECT COUNT(*) AS count FROM todo_items WHERE user_id = ?').bind(userId).first(),
+  const [routineRows, todoRows] = await Promise.all([
+    context.env.DB.prepare(
+      `SELECT id, label FROM routine_items
+       WHERE user_id = ? AND is_active = 1
+       ORDER BY sort_order ASC, created_at ASC`,
+    ).bind(userId).all(),
+    context.env.DB.prepare(
+      `SELECT id, label, behavior, interval_days FROM todo_items
+       WHERE user_id = ? AND is_active = 1
+       ORDER BY sort_order ASC, created_at ASC`,
+    ).bind(userId).all(),
   ])
 
-  const now = new Date().toISOString()
   const statements = []
+  const now = new Date().toISOString()
 
-  if (!Number(routineCount?.count ?? 0)) {
-    DEFAULT_ROUTINES.forEach((label, index) => {
+  if (matchesLegacyRoutines(routineRows.results)) {
+    routineRows.results.forEach((row) => {
       statements.push(
         context.env.DB.prepare(
-          `INSERT INTO routine_items (id, user_id, label, sort_order, is_active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 1, ?, ?)`,
-        ).bind(crypto.randomUUID(), userId, label, index, now, now),
+          'UPDATE routine_items SET is_active = 0, updated_at = ? WHERE id = ? AND user_id = ?',
+        ).bind(now, row.id, userId),
       )
     })
   }
 
-  if (!Number(todoCount?.count ?? 0)) {
-    DEFAULT_TODOS.forEach((todo, index) => {
+  if (matchesLegacyTodos(todoRows.results)) {
+    todoRows.results.forEach((row) => {
       statements.push(
         context.env.DB.prepare(
-          `INSERT INTO todo_items (id, user_id, label, behavior, interval_days, sort_order, is_active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-        ).bind(
-          crypto.randomUUID(),
-          userId,
-          todo.label,
-          todo.behavior,
-          todo.intervalDays,
-          index,
-          now,
-          now,
-        ),
+          'UPDATE todo_items SET is_active = 0, updated_at = ? WHERE id = ? AND user_id = ?',
+        ).bind(now, row.id, userId),
       )
     })
   }

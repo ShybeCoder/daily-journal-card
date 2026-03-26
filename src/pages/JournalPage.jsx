@@ -70,7 +70,16 @@ function TemplateEditor({ items, onAdd, onChange, onRemove, onSave, saving, task
     <div className="mt-5 rounded-[24px] border border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] p-4">
       <div className="space-y-3">
         {items.map((item, index) => (
-          <div className="grid gap-3 lg:grid-cols-[1fr_170px_130px_44px]" key={item.id}>
+          <div
+            className={`grid gap-3 ${
+              taskMode
+                ? item.behavior === 'interval'
+                  ? 'lg:grid-cols-[1fr_170px_130px_44px]'
+                  : 'lg:grid-cols-[1fr_170px_44px]'
+                : 'lg:grid-cols-[1fr_44px]'
+            }`}
+            key={item.id}
+          >
             <input className={INPUT} onChange={(event) => onChange(index, 'label', event.target.value)} value={item.label} />
             {taskMode ? (
               <>
@@ -80,22 +89,18 @@ function TemplateEditor({ items, onAdd, onChange, onRemove, onSave, saving, task
                   <option value="monthly">Monthly task</option>
                   <option value="interval">Every ___ days</option>
                 </select>
-                <input
-                  className={INPUT}
-                  disabled={item.behavior !== 'interval'}
-                  min="1"
-                  onChange={(event) => onChange(index, 'intervalDays', event.target.value)}
-                  placeholder="Days"
-                  type="number"
-                  value={item.behavior === 'interval' ? item.intervalDays : ''}
-                />
+                {item.behavior === 'interval' ? (
+                  <input
+                    className={INPUT}
+                    min="1"
+                    onChange={(event) => onChange(index, 'intervalDays', event.target.value)}
+                    placeholder="Days"
+                    type="number"
+                    value={item.intervalDays}
+                  />
+                ) : null}
               </>
-            ) : (
-              <>
-                <div />
-                <div />
-              </>
-            )}
+            ) : null}
             <button className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--color-rose-100)] text-[var(--color-ink)] transition hover:bg-[var(--color-rose-200)]" onClick={() => onRemove(index)} type="button">
               <X className="h-4 w-4" />
             </button>
