@@ -499,29 +499,16 @@ export default function JournalPage() {
         ) : null}
 
         {activeTab === 'looking-forward' ? (
-          <div className="space-y-6">
-            <Section title="Looking Forward To" tone="rose">
-              <GuidedText prompt="What are you excited for in the future?" />
-              <textarea
-                className={AREA}
-                onChange={(event) => updateEntry('lookingForwardTo', event.target.value)}
-                placeholder="It can be something later today, this week, or much farther away."
-                rows={4}
-                value={journal.entry.lookingForwardTo}
-              />
-            </Section>
-
-            <Section title="Keep In Mind">
-              <GuidedText prompt="Anything important you want to remember while moving through today?" />
-              <textarea
-                className={`${AREA} min-h-[180px]`}
-                onChange={(event) => updateEntry('keepInMind', event.target.value)}
-                placeholder="Notes, reminders, boundaries, or thoughts you want close by."
-                rows={6}
-                value={journal.entry.keepInMind}
-              />
-            </Section>
-          </div>
+          <Section title="Looking Forward To" tone="rose">
+            <GuidedText prompt="What are you excited for in the future?" />
+            <textarea
+              className={AREA}
+              onChange={(event) => updateEntry('lookingForwardTo', event.target.value)}
+              placeholder="It can be something later today, this week, or much farther away."
+              rows={4}
+              value={journal.entry.lookingForwardTo}
+            />
+          </Section>
         ) : null}
 
         {activeTab === 'accomplishments' ? (
