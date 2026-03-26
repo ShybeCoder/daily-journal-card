@@ -64,15 +64,15 @@ export default function TimeField({ label, value, onChange }) {
         <Clock3 className="h-4 w-4 text-[var(--color-muted)]" />
       </button>
       {open ? (
-        <div className="absolute left-0 right-0 z-20 mt-2 rounded-[24px] border border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] p-4 shadow-[0_24px_70px_var(--theme-shadow)]">
+        <div className="absolute left-0 right-0 z-20 mt-2 rounded-[24px] border border-[var(--color-sage-200)] bg-[color:var(--theme-panel-strong)] p-4 shadow-[0_24px_70px_var(--theme-shadow)]">
           <div className="grid gap-3 sm:grid-cols-3">
-            <select className="rounded-2xl border border-[var(--color-sage-200)] bg-white/70 px-4 py-3 text-[var(--color-ink)]" onChange={(event) => apply({ ...parts, hour: event.target.value })} value={parts.hour}>
+            <select className="rounded-2xl border border-[var(--color-sage-200)] bg-white px-4 py-3 text-slate-900 shadow-sm" onChange={(event) => apply({ ...parts, hour: event.target.value })} value={parts.hour}>
               {HOURS.map((hour) => <option key={hour} value={hour}>{hour}</option>)}
             </select>
-            <select className="rounded-2xl border border-[var(--color-sage-200)] bg-white/70 px-4 py-3 text-[var(--color-ink)]" onChange={(event) => apply({ ...parts, minute: event.target.value })} value={parts.minute}>
+            <select className="rounded-2xl border border-[var(--color-sage-200)] bg-white px-4 py-3 text-slate-900 shadow-sm" onChange={(event) => apply({ ...parts, minute: event.target.value })} value={parts.minute}>
               {MINUTES.map((minute) => <option key={minute} value={minute}>{minute}</option>)}
             </select>
-            <select className="rounded-2xl border border-[var(--color-sage-200)] bg-white/70 px-4 py-3 text-[var(--color-ink)]" onChange={(event) => apply({ ...parts, period: event.target.value })} value={parts.period}>
+            <select className="rounded-2xl border border-[var(--color-sage-200)] bg-white px-4 py-3 text-slate-900 shadow-sm" onChange={(event) => apply({ ...parts, period: event.target.value })} value={parts.period}>
               <option value="AM">AM</option>
               <option value="PM">PM</option>
             </select>

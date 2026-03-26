@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
 CREATE TABLE IF NOT EXISTS user_settings (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   theme_mode TEXT NOT NULL DEFAULT 'preset',
-  theme_preset TEXT NOT NULL DEFAULT 'pastel',
+  theme_preset TEXT NOT NULL DEFAULT 'light',
   theme_config TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL

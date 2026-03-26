@@ -6,7 +6,18 @@ import { apiRequest } from '../lib/api.js'
 const ThemeContext = createContext(null)
 
 const PRESETS = {
-  pastel: {
+  light: {
+    background: '#f5f6ef',
+    surface: '#ffffff',
+    panel: '#edf3e6',
+    primary: '#7ca36f',
+    accent: '#d59a88',
+    text: '#263127',
+    muted: '#6c7869',
+    star: '#f0bf45',
+    nav: '#9ecf8a',
+  },
+  forest: {
     background: '#f7efe1',
     surface: '#fffaf4',
     panel: '#edf4eb',
@@ -15,16 +26,18 @@ const PRESETS = {
     text: '#40362d',
     muted: '#73675d',
     star: '#f2b63d',
+    nav: '#5a6f57',
   },
-  light: {
-    background: '#f2f4f7',
-    surface: '#ffffff',
-    panel: '#e6edf6',
-    primary: '#35526e',
-    accent: '#c87a7d',
-    text: '#1f2937',
-    muted: '#667085',
-    star: '#f4b544',
+  pastel: {
+    background: '#fff4f7',
+    surface: '#fffdfd',
+    panel: '#f3ecff',
+    primary: '#b493d6',
+    accent: '#f6b8c8',
+    text: '#4a4258',
+    muted: '#857a95',
+    star: '#ffc97d',
+    nav: '#b8dca7',
   },
   dark: {
     background: '#171c1a',
@@ -35,7 +48,15 @@ const PRESETS = {
     text: '#f6f1e8',
     muted: '#b6b0a5',
     star: '#ffd45f',
+    nav: '#86b970',
   },
+}
+
+const PRESET_LABELS = {
+  light: 'Light',
+  forest: 'Forest',
+  pastel: 'Pastel',
+  dark: 'Dark',
 }
 
 function clamp(value) {
@@ -73,7 +94,7 @@ function alpha(hex, value) {
 }
 
 function resolveTheme(theme) {
-  const preset = PRESETS[theme?.preset] ?? PRESETS.pastel
+  const preset = PRESETS[theme?.preset] ?? PRESETS.light
   return theme?.mode === 'custom' ? { ...preset, ...(theme.custom ?? {}) } : preset
 }
 
@@ -101,6 +122,7 @@ function applyTheme(theme) {
     '--theme-panel-strong': mix(theme.panel, theme.primary, 0.08),
     '--theme-header': alpha(theme.background, 0.85),
     '--theme-shadow': alpha(theme.primary, 0.18),
+    '--theme-nav-active': theme.nav ?? theme.primary,
     '--theme-wash-left': mix(theme.background, theme.accent, 0.45),
     '--theme-wash-right': mix(theme.background, theme.primary, 0.3),
     '--theme-wash-bottom': mix(theme.background, theme.surface, 0.4),
@@ -116,8 +138,8 @@ export function ThemeProvider({ children }) {
   const { isAuthenticated } = useAuth()
   const [themeState, setThemeState] = useState({
     mode: 'preset',
-    preset: 'pastel',
-    custom: PRESETS.pastel,
+    preset: 'light',
+    custom: PRESETS.light,
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -132,8 +154,8 @@ export function ThemeProvider({ children }) {
       if (!isAuthenticated) {
         setThemeState({
           mode: 'preset',
-          preset: 'pastel',
-          custom: PRESETS.pastel,
+          preset: 'light',
+          custom: PRESETS.light,
         })
         return
       }
@@ -144,15 +166,15 @@ export function ThemeProvider({ children }) {
           setThemeState({
             mode: data.theme.mode,
             preset: data.theme.preset,
-            custom: { ...PRESETS[data.theme.preset], ...data.theme.custom },
+            custom: { ...(PRESETS[data.theme.preset] ?? PRESETS.light), ...data.theme.custom },
           })
         }
       } catch {
         if (active) {
           setThemeState({
             mode: 'preset',
-            preset: 'pastel',
-            custom: PRESETS.pastel,
+            preset: 'light',
+            custom: PRESETS.light,
           })
         }
       }
@@ -180,6 +202,7 @@ export function ThemeProvider({ children }) {
 
   const value = {
     presets: PRESETS,
+    presetLabels: PRESET_LABELS,
     themeState,
     resolvedTheme: resolveTheme(themeState),
     settingsOpen,

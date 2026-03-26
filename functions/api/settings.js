@@ -3,7 +3,7 @@ import { json } from '../_lib/response.js'
 
 const DEFAULT_THEME = {
   mode: 'preset',
-  preset: 'pastel',
+  preset: 'light',
   custom: {},
 }
 
@@ -19,16 +19,16 @@ function normalizeTheme(payload = {}) {
   const custom = payload.custom && typeof payload.custom === 'object' ? payload.custom : {}
   return {
     mode: payload.mode === 'custom' ? 'custom' : 'preset',
-    preset: typeof payload.preset === 'string' && payload.preset.trim() ? payload.preset : 'pastel',
+    preset: typeof payload.preset === 'string' && payload.preset.trim() ? payload.preset : 'light',
     custom: {
-      background: typeof custom.background === 'string' ? custom.background : '#f7efe1',
-      surface: typeof custom.surface === 'string' ? custom.surface : '#fffaf4',
-      panel: typeof custom.panel === 'string' ? custom.panel : '#edf4eb',
-      primary: typeof custom.primary === 'string' ? custom.primary : '#5a6f57',
+      background: typeof custom.background === 'string' ? custom.background : '#f5f6ef',
+      surface: typeof custom.surface === 'string' ? custom.surface : '#ffffff',
+      panel: typeof custom.panel === 'string' ? custom.panel : '#edf3e6',
+      primary: typeof custom.primary === 'string' ? custom.primary : '#7ca36f',
       accent: typeof custom.accent === 'string' ? custom.accent : '#d59a88',
-      text: typeof custom.text === 'string' ? custom.text : '#40362d',
-      muted: typeof custom.muted === 'string' ? custom.muted : '#73675d',
-      star: typeof custom.star === 'string' ? custom.star : '#f2b63d',
+      text: typeof custom.text === 'string' ? custom.text : '#263127',
+      muted: typeof custom.muted === 'string' ? custom.muted : '#6c7869',
+      star: typeof custom.star === 'string' ? custom.star : '#f0bf45',
     },
   }
 }

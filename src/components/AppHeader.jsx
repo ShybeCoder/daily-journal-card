@@ -8,7 +8,7 @@ function navClass({ isActive }) {
   return [
     'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition',
     isActive
-      ? 'bg-[var(--color-sage-600)] text-white shadow-sm'
+      ? 'bg-[var(--theme-nav-active)] text-white shadow-sm'
       : 'bg-white/70 text-[var(--color-ink)] hover:bg-white',
   ].join(' ')
 }

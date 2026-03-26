@@ -49,7 +49,7 @@ function Preview({ theme }) {
 }
 
 export default function SettingsModal() {
-  const { closeSettings, presets, resolvedTheme, saveTheme, settingsOpen, themeState } = useTheme()
+  const { closeSettings, presetLabels, presets, resolvedTheme, saveTheme, settingsOpen, themeState } = useTheme()
   const [draft, setDraft] = useState(themeState)
   const [busy, setBusy] = useState(false)
 
@@ -64,7 +64,7 @@ export default function SettingsModal() {
   }
 
   const previewTheme =
-    draft.mode === 'custom' ? { ...(presets[draft.preset] ?? presets.pastel), ...draft.custom } : presets[draft.preset]
+    draft.mode === 'custom' ? { ...(presets[draft.preset] ?? presets.light), ...draft.custom } : presets[draft.preset]
 
   async function handleSave() {
     setBusy(true)
@@ -120,7 +120,7 @@ export default function SettingsModal() {
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="font-medium capitalize text-[var(--color-ink)]">{key}</p>
+                        <p className="font-medium text-[var(--color-ink)]">{presetLabels[key] ?? key}</p>
                         <p className="text-sm text-[var(--color-muted)]">One-click look</p>
                       </div>
                       <div className="flex gap-2">
