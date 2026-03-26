@@ -209,34 +209,49 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => <div key={label}>{label}</div>)}
+            <div className="mt-6 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)] sm:gap-2 sm:text-xs sm:tracking-[0.18em]">
+              {[
+                ['Sun', 'S'],
+                ['Mon', 'M'],
+                ['Tue', 'T'],
+                ['Wed', 'W'],
+                ['Thu', 'T'],
+                ['Fri', 'F'],
+                ['Sat', 'S'],
+              ].map(([fullLabel, shortLabel]) => (
+                <div key={fullLabel}>
+                  <span className="sm:hidden">{shortLabel}</span>
+                  <span className="hidden sm:inline">{fullLabel}</span>
+                </div>
+              ))}
             </div>
 
-            <div className="mt-3 grid grid-cols-7 gap-2">
+            <div className="mt-3 grid grid-cols-7 gap-1 sm:gap-2">
               {days.map((day) => {
                 const selected = selectedDate === day.key
                 const reminders = calendar.eventsByDate?.[day.key] ?? []
                 return (
                   <button
-                    className={`min-h-[106px] rounded-[24px] border p-3 text-left transition ${selected ? 'border-[var(--color-sage-500)] bg-[var(--color-sage-100)] shadow-sm' : day.isInMonth ? 'border-white/70 bg-[var(--theme-white-88)] hover:border-[var(--color-sage-300)]' : 'border-transparent bg-white/30 text-[var(--color-muted)]'}`}
+                    className={`min-h-[80px] rounded-[18px] border p-2 text-left transition sm:min-h-[106px] sm:rounded-[24px] sm:p-3 ${selected ? 'border-[var(--color-sage-500)] bg-[var(--color-sage-100)] shadow-sm' : day.isInMonth ? 'border-white/70 bg-[var(--theme-white-88)] hover:border-[var(--color-sage-300)]' : 'border-transparent bg-white/30 text-[var(--color-muted)]'}`}
                     key={day.key}
                     onClick={() => setSelectedDate(day.key)}
                     type="button"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <span className={`text-sm font-medium ${day.isToday ? 'text-[var(--color-ink)]' : 'text-[var(--color-ink)]'}`}>{day.dayNumber}</span>
-                      {day.isToday ? <Star className="h-4 w-4" style={{ color: 'var(--color-star)' }} /> : null}
+                      <span className="text-xs font-medium text-[var(--color-ink)] sm:text-sm">{day.dayNumber}</span>
+                      {day.isToday ? <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: 'var(--color-star)' }} /> : null}
                     </div>
-                    <div className="mt-4 space-y-2">
-                      <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-sand)] px-2.5 py-1 text-[11px] text-[var(--color-ink)]">
-                        <NotebookPen className="h-3.5 w-3.5" />
-                        {entries.has(day.key) ? 'Journal saved' : 'Blank card'}
-                      </div>
+                    <div className="mt-2 space-y-1.5 sm:mt-4 sm:space-y-2">
+                      {entries.has(day.key) ? (
+                        <div className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[var(--color-sand)] px-2 py-1 text-[10px] text-[var(--color-ink)] sm:gap-2 sm:px-2.5 sm:text-[11px]">
+                          <NotebookPen className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
+                          <span className="truncate">Journal saved</span>
+                        </div>
+                      ) : null}
                       {reminders.length ? (
-                        <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-rose-100)] px-2.5 py-1 text-[11px] text-[var(--color-ink)]">
-                          <CalendarDays className="h-3.5 w-3.5" />
-                          {reminders.length} item{reminders.length === 1 ? '' : 's'}
+                        <div className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[var(--color-rose-100)] px-2 py-1 text-[10px] text-[var(--color-ink)] sm:gap-2 sm:px-2.5 sm:text-[11px]">
+                          <CalendarDays className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
+                          <span className="truncate">{reminders.length} item{reminders.length === 1 ? '' : 's'}</span>
                         </div>
                       ) : null}
                     </div>
