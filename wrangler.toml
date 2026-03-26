@@ -1,0 +1,7 @@
+name = "daily-journal-card"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "daily-journal-card-db"
+database_id = "07ce2f73-d780-44b2-937c-0fc87f2c5b38"
