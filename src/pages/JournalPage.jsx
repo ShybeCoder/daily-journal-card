@@ -16,7 +16,7 @@ import { formatLongDate, parseDateKey, todayKey } from '../lib/dates.js'
 
 const INPUT =
   'w-full rounded-2xl border border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] px-4 py-3 text-[15px] text-[var(--color-ink)] shadow-sm placeholder:text-[var(--color-muted)] focus:border-[var(--color-sage-500)] focus:outline-none focus:ring-4 focus:ring-[color:rgba(90,111,87,0.14)]'
-const AREA = `${INPUT} min-h-[132px] resize-y`
+const LIST_INPUT = `${INPUT} min-h-[64px] resize-none overflow-hidden`
 const FOOD_FIELDS = [
   ['breakfast', 'Breakfast'],
   ['morningSnack', 'Morning snack'],
@@ -35,12 +35,53 @@ const JOURNAL_TABS = [
   { id: 'routine', label: 'Routine' },
   { id: 'todo', label: 'To Do' },
 ]
+const GUIDED_LIST_FIELDS = [
+  'affirmations',
+  'gratitude',
+  'lookingForwardTo',
+  'accomplishments',
+  'selfCare',
+  'ailments',
+]
 
 function withTrailingBlankTask(tasks) {
   const next = Array.isArray(tasks) ? tasks.filter((task) => task.label || task.checked) : []
   if (!next.length || next[next.length - 1].label) {
     next.push({ id: `task-${next.length + 1}`, label: '', checked: false })
   }
+  return next
+}
+
+function autoSizeTextarea(target) {
+  target.style.height = '0px'
+  target.style.height = `${Math.max(64, target.scrollHeight)}px`
+}
+
+function createGuidedItem(text = '', id = crypto.randomUUID()) {
+  return { id, text }
+}
+
+function withTrailingBlankGuidedItem(items) {
+  const next = Array.isArray(items)
+    ? items
+        .map((item, index) => createGuidedItem(item?.text ?? '', item?.id || `guided-${index + 1}`))
+        .filter((item) => item.text.trim())
+    : []
+
+  if (!next.length || next[next.length - 1].text.trim()) {
+    next.push(createGuidedItem(''))
+  }
+
+  return next
+}
+
+function hydrateGuidedEntry(entry) {
+  const next = { ...entry }
+  GUIDED_LIST_FIELDS.forEach((field) => {
+    next[field] = withTrailingBlankGuidedItem(
+      (Array.isArray(entry[field]) ? entry[field] : []).map((item, index) => createGuidedItem(item, `${field}-${index + 1}`)),
+    )
+  })
   return next
 }
 
@@ -137,6 +178,43 @@ function GuidedText({ prompt, examples }) {
   )
 }
 
+function AutoSizeTextarea({ onChange, placeholder, value }) {
+  const textareaRef = useRef(null)
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      autoSizeTextarea(textareaRef.current)
+    }
+  }, [value])
+
+  return (
+    <textarea
+      className={LIST_INPUT}
+      onChange={onChange}
+      onInput={(event) => autoSizeTextarea(event.currentTarget)}
+      placeholder={placeholder}
+      ref={textareaRef}
+      rows={1}
+      value={value}
+    />
+  )
+}
+
+function GrowingListField({ items, onChange, placeholder }) {
+  return (
+    <div className="space-y-3">
+      {items.map((item, index) => (
+        <AutoSizeTextarea
+          key={item.id}
+          onChange={(event) => onChange(index, event.target.value)}
+          placeholder={index === 0 ? placeholder : 'Add another line'}
+          value={item.text}
+        />
+      ))}
+    </div>
+  )
+}
+
 export default function JournalPage() {
   const navigate = useNavigate()
   const { date } = useParams()
@@ -174,6 +252,7 @@ export default function JournalPage() {
       try {
         const data = await apiRequest(`/api/journal/${dateKey}`)
         if (!active) return
+        data.entry = hydrateGuidedEntry(data.entry)
         data.todayTasks = withTrailingBlankTask(data.todayTasks)
         setJournal(data)
         setRoutineDraft(data.routines.map(({ id, label }) => ({ id, label })))
@@ -239,6 +318,22 @@ export default function JournalPage() {
     setJournal((current) => ({ ...current, entry: { ...current.entry, [field]: value } }))
   }
 
+  function updateEntryList(field, index, value) {
+    setJournal((current) => {
+      const nextItems = current.entry[field].map((item, itemIndex) => (
+        itemIndex === index ? { ...item, text: value } : item
+      ))
+
+      return {
+        ...current,
+        entry: {
+          ...current.entry,
+          [field]: withTrailingBlankGuidedItem(nextItems),
+        },
+      }
+    })
+  }
+
   function updateFood(slot, field, value) {
     setJournal((current) => ({
       ...current,
@@ -287,6 +382,7 @@ export default function JournalPage() {
         body: JSON.stringify({ routines: routineDraft, todos: todoDraft }),
       })
       const refreshed = await apiRequest(`/api/journal/${dateKey}`)
+      refreshed.entry = hydrateGuidedEntry(refreshed.entry)
       refreshed.todayTasks = withTrailingBlankTask(refreshed.todayTasks)
       setJournal(refreshed)
       if (kind === 'routine') setShowRoutineEditor(false)
@@ -471,29 +567,22 @@ export default function JournalPage() {
 
         {activeTab === 'affirmations' ? (
           <Section title="Affirmations" tone="rose">
-            <GuidedText
-              examples='Examples: "I am strong." "I have value."'
-              prompt="Use this space for kind things you want to remind yourself of today."
-            />
-            <textarea
-              className={AREA}
-              onChange={(event) => updateEntry('affirmations', event.target.value)}
+            <GuidedText prompt="Use this space for kind things you want to remind yourself of today." />
+            <GrowingListField
+              items={journal.entry.affirmations}
+              onChange={(index, value) => updateEntryList('affirmations', index, value)}
               placeholder={`I am strong.\nI have value.`}
-              rows={5}
-              value={journal.entry.affirmations}
             />
           </Section>
         ) : null}
 
         {activeTab === 'gratitude' ? (
-          <Section title="Gratitude List">
+          <Section title="I'm Grateful For">
             <GuidedText prompt="What are you grateful for today?" />
-            <textarea
-              className={AREA}
-              onChange={(event) => updateEntry('gratitude', event.target.value)}
+            <GrowingListField
+              items={journal.entry.gratitude}
+              onChange={(index, value) => updateEntryList('gratitude', index, value)}
               placeholder="A person, a moment, a comfort, or even something tiny counts."
-              rows={5}
-              value={journal.entry.gratitude}
             />
           </Section>
         ) : null}
@@ -501,12 +590,10 @@ export default function JournalPage() {
         {activeTab === 'looking-forward' ? (
           <Section title="Looking Forward To" tone="rose">
             <GuidedText prompt="What are you excited for in the future?" />
-            <textarea
-              className={AREA}
-              onChange={(event) => updateEntry('lookingForwardTo', event.target.value)}
+            <GrowingListField
+              items={journal.entry.lookingForwardTo}
+              onChange={(index, value) => updateEntryList('lookingForwardTo', index, value)}
               placeholder="It can be something later today, this week, or much farther away."
-              rows={4}
-              value={journal.entry.lookingForwardTo}
             />
           </Section>
         ) : null}
@@ -514,12 +601,10 @@ export default function JournalPage() {
         {activeTab === 'accomplishments' ? (
           <Section title="Accomplishments" tone="rose">
             <GuidedText prompt="Did you get out of bed today? What else have you accomplished?" />
-            <textarea
-              className={`${AREA} min-h-[220px]`}
-              onChange={(event) => updateEntry('accomplishments', event.target.value)}
+            <GrowingListField
+              items={journal.entry.accomplishments}
+              onChange={(index, value) => updateEntryList('accomplishments', index, value)}
               placeholder="Big wins count. Tiny wins count too."
-              rows={8}
-              value={journal.entry.accomplishments}
             />
           </Section>
         ) : null}
@@ -528,23 +613,19 @@ export default function JournalPage() {
           <div className="grid gap-6 xl:grid-cols-2">
             <Section title="Self Care">
               <GuidedText prompt="How have you shown yourself love today?" />
-              <textarea
-                className={AREA}
-                onChange={(event) => updateEntry('selfCare', event.target.value)}
+              <GrowingListField
+                items={journal.entry.selfCare}
+                onChange={(index, value) => updateEntryList('selfCare', index, value)}
                 placeholder="Rest, food, boundaries, kindness, movement, quiet time, or anything else."
-                rows={4}
-                value={journal.entry.selfCare}
               />
             </Section>
 
             <Section title="Ailments" tone="rose">
               <GuidedText prompt="What problems are you facing today?" />
-              <textarea
-                className={AREA}
-                onChange={(event) => updateEntry('ailments', event.target.value)}
+              <GrowingListField
+                items={journal.entry.ailments}
+                onChange={(index, value) => updateEntryList('ailments', index, value)}
                 placeholder="Physical, emotional, or mental struggles all belong here."
-                rows={4}
-                value={journal.entry.ailments}
               />
             </Section>
           </div>

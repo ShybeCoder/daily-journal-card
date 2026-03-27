@@ -150,15 +150,40 @@ function normalizeTodayTasks(value) {
   return saved
 }
 
+function normalizeEntryList(value) {
+  const parsed = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? safeJson(value, null)
+      : null
+
+  const source = Array.isArray(parsed)
+    ? parsed
+    : typeof value === 'string'
+      ? trimText(value)
+          .split(/\n+/)
+          .map((item) => item.trim())
+      : []
+
+  return source
+    .map((item) => trimText(typeof item === 'string' ? item : item?.text ?? '', 500).trim())
+    .filter(Boolean)
+    .slice(0, 40)
+}
+
+function serializeEntryList(value) {
+  return JSON.stringify(normalizeEntryList(value))
+}
+
 function normalizeEntry(entry = {}) {
   return {
     foodLog: normalizeFoodLog(entry.foodLog),
-    lookingForwardTo: trimText(entry.lookingForwardTo),
-    affirmations: trimText(entry.affirmations),
-    gratitude: trimText(entry.gratitude),
-    accomplishments: trimText(entry.accomplishments),
-    selfCare: trimText(entry.selfCare),
-    ailments: trimText(entry.ailments),
+    lookingForwardTo: normalizeEntryList(entry.lookingForwardTo),
+    affirmations: normalizeEntryList(entry.affirmations),
+    gratitude: normalizeEntryList(entry.gratitude),
+    accomplishments: normalizeEntryList(entry.accomplishments),
+    selfCare: normalizeEntryList(entry.selfCare),
+    ailments: normalizeEntryList(entry.ailments),
     keepInMind: trimText(entry.keepInMind),
     wakeUpTime: trimText(entry.wakeUpTime, 20),
     bedtime: trimText(entry.bedtime, 20),
@@ -499,12 +524,12 @@ export async function saveJournalDay(context, userId, dateKey, payload) {
       entry.foodLog.breakfast.name,
       entry.foodLog.lunch.name,
       entry.foodLog.dinner.name,
-      entry.lookingForwardTo,
-      entry.affirmations,
-      entry.gratitude,
-      entry.accomplishments,
-      entry.selfCare,
-      entry.ailments,
+      serializeEntryList(entry.lookingForwardTo),
+      serializeEntryList(entry.affirmations),
+      serializeEntryList(entry.gratitude),
+      serializeEntryList(entry.accomplishments),
+      serializeEntryList(entry.selfCare),
+      serializeEntryList(entry.ailments),
       entry.keepInMind,
       entry.wakeUpTime,
       entry.bedtime,
