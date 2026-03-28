@@ -139,12 +139,12 @@ function normalizeTodayTasks(value) {
   const tasks = (Array.isArray(value) ? value : []).slice(0, 24).map((task, index) => ({
     id: typeof task?.id === 'string' && task.id.trim() ? task.id : `task-${index + 1}`,
     label: trimText(task?.label ?? '', 160),
-    checked: Boolean(task?.checked),
+    status: normalizeCheckStatus(task?.status ?? task?.checked),
   }))
 
-  const saved = tasks.filter((task) => task.label || task.checked)
+  const saved = tasks.filter((task) => task.label || task.status)
   if (!saved.length || saved[saved.length - 1].label) {
-    saved.push({ id: `task-${saved.length + 1}`, label: '', checked: false })
+    saved.push({ id: `task-${saved.length + 1}`, label: '', status: null })
   }
 
   return saved
@@ -191,10 +191,19 @@ function normalizeEntry(entry = {}) {
   }
 }
 
+function normalizeCheckStatus(value) {
+  if (value === true || value === 'done') return 'done'
+  if (value === 'skipped') return 'skipped'
+  return null
+}
+
 function normalizeChecks(source, ids) {
   const values = source && typeof source === 'object' ? source : {}
   return ids.reduce((all, id) => {
-    all[id] = Boolean(values[id])
+    const status = normalizeCheckStatus(values[id])
+    if (status) {
+      all[id] = status
+    }
     return all
   }, {})
 }
@@ -262,24 +271,66 @@ function dueTask(todo, lastDoneDate, dateKey) {
 }
 
 function taskState(todo, history, currentChecks, dateKey) {
+  const currentStatus = normalizeCheckStatus(currentChecks[todo.id])
+
   if (todo.behavior === 'daily') {
-    return { isDone: Boolean(currentChecks[todo.id]), isVisible: true }
+    return { status: currentStatus, isVisible: true }
   }
 
-  const lastDone = history.find((row) => row.todoChecks[todo.id] === true)?.entryDate ?? null
+  if (currentStatus) {
+    return { status: currentStatus, isVisible: true }
+  }
+
+  const lastDone = history.find((row) => normalizeCheckStatus(row.todoChecks[todo.id]) === 'done')?.entryDate ?? null
 
   if (!lastDone) {
-    return { isDone: false, isVisible: true }
-  }
-
-  if (lastDone === dateKey) {
-    return { isDone: true, isVisible: true }
+    return { status: null, isVisible: true }
   }
 
   return {
-    isDone: false,
+    status: null,
     isVisible: dueTask(todo, lastDone, dateKey),
   }
+}
+
+function hasFoodContent(foodLog) {
+  return FOOD_SLOTS.some((slot) => {
+    const meal = foodLog?.[slot] ?? {}
+    return ['name', 'calories', 'carbs', 'protein', 'fats'].some((field) => trimText(meal[field] ?? '', 160).trim())
+  })
+}
+
+export function hasMeaningfulJournalRow(row) {
+  if (!row) return false
+
+  const entry = normalizeEntry({
+    foodLog: safeJson(row.food_log, {}),
+    lookingForwardTo: row.looking_forward_to,
+    affirmations: row.affirmations,
+    gratitude: row.gratitude,
+    accomplishments: row.accomplishments,
+    selfCare: row.self_care,
+    ailments: row.ailments,
+    keepInMind: row.keep_in_mind,
+    wakeUpTime: row.wake_up_time,
+    bedtime: row.bedtime,
+    waterCount: row.water_count,
+  })
+  const todayTasks = normalizeTodayTasks(safeJson(row.today_tasks, []))
+
+  return (
+    hasFoodContent(entry.foodLog) ||
+    entry.lookingForwardTo.length > 0 ||
+    entry.affirmations.length > 0 ||
+    entry.gratitude.length > 0 ||
+    entry.accomplishments.length > 0 ||
+    entry.selfCare.length > 0 ||
+    entry.ailments.length > 0 ||
+    entry.wakeUpTime.trim() !== '' ||
+    entry.bedtime.trim() !== '' ||
+    entry.waterCount > 0 ||
+    todayTasks.some((task) => task.label.trim())
+  )
 }
 
 function calendarOccurrences(event, month) {
@@ -463,7 +514,7 @@ export async function loadJournalDay(context, userId, dateKey) {
     entry,
     routines: templates.routines.map((item) => ({
       ...item,
-      isDone: Boolean(routineChecks[item.id]),
+      status: normalizeCheckStatus(routineChecks[item.id]),
     })),
     todos: templates.todos
       .map((item) => ({
@@ -480,11 +531,11 @@ export async function saveJournalDay(context, userId, dateKey, payload) {
   const templates = await getTemplates(context, userId)
   const entry = normalizeEntry(payload?.entry)
   const routineChecks = normalizeChecks(
-    Object.fromEntries((Array.isArray(payload?.routines) ? payload.routines : []).map((item) => [item.id, item.isDone])),
+    Object.fromEntries((Array.isArray(payload?.routines) ? payload.routines : []).map((item) => [item.id, item.status])),
     templates.routines.map((item) => item.id),
   )
   const todoChecks = normalizeChecks(
-    Object.fromEntries((Array.isArray(payload?.todos) ? payload.todos : []).map((item) => [item.id, item.isDone])),
+    Object.fromEntries((Array.isArray(payload?.todos) ? payload.todos : []).map((item) => [item.id, item.status])),
     templates.todos.map((item) => item.id),
   )
   const now = new Date().toISOString()
@@ -536,7 +587,7 @@ export async function saveJournalDay(context, userId, dateKey, payload) {
       entry.waterCount,
       JSON.stringify(routineChecks),
       JSON.stringify(todoChecks),
-      JSON.stringify(normalizeTodayTasks(payload?.todayTasks).filter((item) => item.label || item.checked)),
+      JSON.stringify(normalizeTodayTasks(payload?.todayTasks).filter((item) => item.label || item.status)),
       now,
       now,
     )

@@ -1,5 +1,5 @@
 import { requireUser } from '../../_lib/auth.js'
-import { isMonthKey, mapCalendarEvents, monthBounds } from '../../_lib/journal.js'
+import { hasMeaningfulJournalRow, isMonthKey, mapCalendarEvents, monthBounds } from '../../_lib/journal.js'
 import { error, json } from '../../_lib/response.js'
 
 export async function onRequestGet(context) {
@@ -12,7 +12,8 @@ export async function onRequestGet(context) {
   const { start, end } = monthBounds(month)
   const [entries, eventRows] = await Promise.all([
     context.env.DB.prepare(
-      `SELECT entry_date FROM journal_entries
+      `SELECT *
+       FROM journal_entries
        WHERE user_id = ? AND entry_date BETWEEN ? AND ?
        ORDER BY entry_date ASC`,
     ).bind(session.user.id, start, end).all(),
@@ -31,7 +32,7 @@ export async function onRequestGet(context) {
 
   return json({
     month,
-    entries: entries.results.map((row) => row.entry_date),
+    entries: entries.results.filter(hasMeaningfulJournalRow).map((row) => row.entry_date),
     eventsByDate,
   })
 }

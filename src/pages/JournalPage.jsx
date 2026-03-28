@@ -1,8 +1,25 @@
 import {
+  DndContext,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
   ArrowLeft,
   ArrowRight,
   CalendarHeart,
   CalendarPlus2,
+  Check,
+  GripVertical,
   Star,
   X,
 } from 'lucide-react'
@@ -45,9 +62,9 @@ const GUIDED_LIST_FIELDS = [
 ]
 
 function withTrailingBlankTask(tasks) {
-  const next = Array.isArray(tasks) ? tasks.filter((task) => task.label || task.checked) : []
+  const next = Array.isArray(tasks) ? tasks.filter((task) => task.label || task.status) : []
   if (!next.length || next[next.length - 1].label) {
-    next.push({ id: `task-${next.length + 1}`, label: '', checked: false })
+    next.push({ id: `task-${next.length + 1}`, label: '', status: null })
   }
   return next
 }
@@ -75,6 +92,12 @@ function withTrailingBlankGuidedItem(items) {
   return next
 }
 
+function withStatus(value) {
+  if (value === true || value === 'done') return 'done'
+  if (value === 'skipped') return 'skipped'
+  return null
+}
+
 function hydrateGuidedEntry(entry) {
   const next = { ...entry }
   GUIDED_LIST_FIELDS.forEach((field) => {
@@ -83,6 +106,16 @@ function hydrateGuidedEntry(entry) {
     )
   })
   return next
+}
+
+function hydrateTodayTasks(tasks) {
+  return withTrailingBlankTask(
+    (Array.isArray(tasks) ? tasks : []).map((task, index) => ({
+      id: task?.id || `task-${index + 1}`,
+      label: task?.label ?? '',
+      status: withStatus(task?.status ?? task?.checked),
+    })),
+  )
 }
 
 function Section({ children, title, tone = 'sage', className = '' }) {
@@ -178,12 +211,12 @@ function GuidedText({ prompt, examples }) {
   )
 }
 
-function AutoSizeTextarea({ onChange, placeholder, value }) {
-  const textareaRef = useRef(null)
+function AutoSizeTextarea({ onChange, onKeyDown, placeholder, textareaRef: registerTextareaRef, value }) {
+  const inputRef = useRef(null)
 
   useEffect(() => {
-    if (textareaRef.current) {
-      autoSizeTextarea(textareaRef.current)
+    if (inputRef.current) {
+      autoSizeTextarea(inputRef.current)
     }
   }, [value])
 
@@ -192,25 +225,159 @@ function AutoSizeTextarea({ onChange, placeholder, value }) {
       className={LIST_INPUT}
       onChange={onChange}
       onInput={(event) => autoSizeTextarea(event.currentTarget)}
+      onKeyDown={onKeyDown}
       placeholder={placeholder}
-      ref={textareaRef}
+      ref={(element) => {
+        inputRef.current = element
+        if (typeof registerTextareaRef === 'function') {
+          registerTextareaRef(element)
+        }
+      }}
       rows={1}
       value={value}
     />
   )
 }
 
-function GrowingListField({ items, onChange, placeholder }) {
+function SortableGrowingListItem({ index, item, onChange, onKeyDown, placeholder, registerRef }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div
+      className={`grid grid-cols-[40px_1fr] gap-3 rounded-[24px] border border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] p-3 shadow-sm ${
+        isDragging ? 'shadow-lg' : ''
+      }`}
+      ref={setNodeRef}
+      style={style}
+    >
+      <button
+        aria-label="Drag to reorder"
+        className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--theme-white-80)] text-[var(--color-muted)] transition hover:bg-white"
+        type="button"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <AutoSizeTextarea
+        onChange={(event) => onChange(index, event.target.value)}
+        onKeyDown={(event) => onKeyDown(index, event)}
+        placeholder={index === 0 ? placeholder : 'Add another line'}
+        textareaRef={(element) => registerRef(item.id, element)}
+        value={item.text}
+      />
+    </div>
+  )
+}
+
+function GrowingListField({ items, onChange, onReorder, placeholder }) {
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+  )
+  const inputRefs = useRef({})
+  const filledItems = items.filter((item) => item.text.trim())
+  const blankItem = items.find((item) => !item.text.trim()) ?? null
+
+  function registerRef(id, element) {
+    if (element) {
+      inputRefs.current[id] = element
+    } else {
+      delete inputRefs.current[id]
+    }
+  }
+
+  function focusItem(id) {
+    window.requestAnimationFrame(() => inputRefs.current[id]?.focus())
+  }
+
+  function handleKeyDown(index, event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      const nextItem = items[index + 1]
+      if (nextItem) {
+        focusItem(nextItem.id)
+      }
+    }
+  }
+
+  function handleDragEnd(event) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = filledItems.findIndex((item) => item.id === active.id)
+    const newIndex = filledItems.findIndex((item) => item.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    onReorder(arrayMove(filledItems, oldIndex, newIndex))
+    focusItem(active.id)
+  }
+
   return (
     <div className="space-y-3">
-      {items.map((item, index) => (
-        <AutoSizeTextarea
-          key={item.id}
-          onChange={(event) => onChange(index, event.target.value)}
-          placeholder={index === 0 ? placeholder : 'Add another line'}
-          value={item.text}
-        />
-      ))}
+      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} sensors={sensors}>
+        <SortableContext items={filledItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+          {filledItems.map((item, index) => (
+            <SortableGrowingListItem
+              index={index}
+              item={item}
+              key={item.id}
+              onChange={onChange}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              registerRef={registerRef}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
+
+      {blankItem ? (
+        <div className="rounded-[24px] border border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] p-3 shadow-sm">
+          <AutoSizeTextarea
+            onChange={(event) => onChange(items.findIndex((item) => item.id === blankItem.id), event.target.value)}
+            onKeyDown={(event) => handleKeyDown(items.findIndex((item) => item.id === blankItem.id), event)}
+            placeholder={filledItems.length ? 'Add another line' : placeholder}
+            textareaRef={(element) => registerRef(blankItem.id, element)}
+            value={blankItem.text}
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function StatusButtons({ onChange, status }) {
+  const buttonBase =
+    'flex h-10 w-10 items-center justify-center rounded-2xl border transition'
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        aria-label="Mark done"
+        className={`${buttonBase} ${
+          status === 'done'
+            ? 'border-[var(--color-sage-600)] bg-[var(--color-sage-600)] text-white'
+            : 'border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] text-[var(--color-ink)] hover:border-[var(--color-sage-400)]'
+        }`}
+        onClick={() => onChange(status === 'done' ? null : 'done')}
+        type="button"
+      >
+        <Check className="h-4 w-4" />
+      </button>
+      <button
+        aria-label="Mark not done"
+        className={`${buttonBase} ${
+          status === 'skipped'
+            ? 'border-[var(--color-rose-400)] bg-[var(--color-rose-200)] text-[var(--color-ink)]'
+            : 'border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] text-[var(--color-ink)] hover:border-[var(--color-rose-300)]'
+        }`}
+        onClick={() => onChange(status === 'skipped' ? null : 'skipped')}
+        type="button"
+      >
+        <X className="h-4 w-4" />
+      </button>
     </div>
   )
 }
@@ -247,13 +414,14 @@ export default function JournalPage() {
     let active = true
     setLoading(true)
     setError('')
+    skipSaveRef.current = true
 
     async function loadDay() {
       try {
         const data = await apiRequest(`/api/journal/${dateKey}`)
         if (!active) return
         data.entry = hydrateGuidedEntry(data.entry)
-        data.todayTasks = withTrailingBlankTask(data.todayTasks)
+        data.todayTasks = hydrateTodayTasks(data.todayTasks)
         setJournal(data)
         setRoutineDraft(data.routines.map(({ id, label }) => ({ id, label })))
         setTodoDraft(
@@ -281,6 +449,7 @@ export default function JournalPage() {
 
   useEffect(() => {
     if (!journal) return undefined
+    if (journal.date !== dateKey) return undefined
     if (skipSaveRef.current) {
       skipSaveRef.current = false
       return undefined
@@ -299,7 +468,7 @@ export default function JournalPage() {
             entry: journal.entry,
             routines: journal.routines,
             todos: journal.todos,
-            todayTasks: journal.todayTasks.filter((task) => task.label || task.checked),
+            todayTasks: journal.todayTasks.filter((task) => task.label || task.status),
           }),
         })
         setSaveState('saved')
@@ -350,10 +519,10 @@ export default function JournalPage() {
     }))
   }
 
-  function toggleList(name, id) {
+  function setListStatus(name, id, status) {
     setJournal((current) => ({
       ...current,
-      [name]: current[name].map((item) => (item.id === id ? { ...item, isDone: !item.isDone } : item)),
+      [name]: current[name].map((item) => (item.id === id ? { ...item, status } : item)),
     }))
   }
 
@@ -367,6 +536,16 @@ export default function JournalPage() {
         todayTasks: withTrailingBlankTask(nextTasks),
       }
     })
+  }
+
+  function reorderEntryList(field, nextItems) {
+    setJournal((current) => ({
+      ...current,
+      entry: {
+        ...current.entry,
+        [field]: withTrailingBlankGuidedItem(nextItems),
+      },
+    }))
   }
 
   function updateDraft(setter, index, field, value) {
@@ -383,7 +562,7 @@ export default function JournalPage() {
       })
       const refreshed = await apiRequest(`/api/journal/${dateKey}`)
       refreshed.entry = hydrateGuidedEntry(refreshed.entry)
-      refreshed.todayTasks = withTrailingBlankTask(refreshed.todayTasks)
+      refreshed.todayTasks = hydrateTodayTasks(refreshed.todayTasks)
       setJournal(refreshed)
       if (kind === 'routine') setShowRoutineEditor(false)
       if (kind === 'todo') setShowTodoEditor(false)
@@ -571,6 +750,7 @@ export default function JournalPage() {
             <GrowingListField
               items={journal.entry.affirmations}
               onChange={(index, value) => updateEntryList('affirmations', index, value)}
+              onReorder={(items) => reorderEntryList('affirmations', items)}
               placeholder={`I am strong.\nI have value.`}
             />
           </Section>
@@ -582,6 +762,7 @@ export default function JournalPage() {
             <GrowingListField
               items={journal.entry.gratitude}
               onChange={(index, value) => updateEntryList('gratitude', index, value)}
+              onReorder={(items) => reorderEntryList('gratitude', items)}
               placeholder="A person, a moment, a comfort, or even something tiny counts."
             />
           </Section>
@@ -593,6 +774,7 @@ export default function JournalPage() {
             <GrowingListField
               items={journal.entry.lookingForwardTo}
               onChange={(index, value) => updateEntryList('lookingForwardTo', index, value)}
+              onReorder={(items) => reorderEntryList('lookingForwardTo', items)}
               placeholder="It can be something later today, this week, or much farther away."
             />
           </Section>
@@ -604,6 +786,7 @@ export default function JournalPage() {
             <GrowingListField
               items={journal.entry.accomplishments}
               onChange={(index, value) => updateEntryList('accomplishments', index, value)}
+              onReorder={(items) => reorderEntryList('accomplishments', items)}
               placeholder="Big wins count. Tiny wins count too."
             />
           </Section>
@@ -616,6 +799,7 @@ export default function JournalPage() {
               <GrowingListField
                 items={journal.entry.selfCare}
                 onChange={(index, value) => updateEntryList('selfCare', index, value)}
+                onReorder={(items) => reorderEntryList('selfCare', items)}
                 placeholder="Rest, food, boundaries, kindness, movement, quiet time, or anything else."
               />
             </Section>
@@ -625,6 +809,7 @@ export default function JournalPage() {
               <GrowingListField
                 items={journal.entry.ailments}
                 onChange={(index, value) => updateEntryList('ailments', index, value)}
+                onReorder={(items) => reorderEntryList('ailments', items)}
                 placeholder="Physical, emotional, or mental struggles all belong here."
               />
             </Section>
@@ -640,10 +825,10 @@ export default function JournalPage() {
 
             <div className="mt-5 space-y-3">
               {journal.routines.length ? journal.routines.map((item) => (
-                <label className="flex items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm" key={item.id}>
-                  <input checked={item.isDone} className="h-5 w-5 rounded border-[var(--color-sage-300)] text-[var(--color-sage-600)] focus:ring-[var(--color-sage-400)]" onChange={() => toggleList('routines', item.id)} type="checkbox" />
+                <div className="flex items-center justify-between gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm" key={item.id}>
                   <span className="text-sm text-[var(--color-ink)]">{item.label}</span>
-                </label>
+                  <StatusButtons onChange={(status) => setListStatus('routines', item.id, status)} status={item.status} />
+                </div>
               )) : <p className="rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 text-sm text-[var(--color-muted)]">No saved routine yet. Add one below.</p>}
             </div>
 
@@ -671,13 +856,13 @@ export default function JournalPage() {
             <GuidedText prompt="You've got this. Remember to take breaks and be kind to yourself while you work through today's list." />
             <div className="space-y-3">
               {journal.todos.length ? journal.todos.map((item) => (
-                <label className="flex items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm" key={item.id}>
-                  <input checked={item.isDone} className="h-5 w-5 rounded border-[var(--color-sage-300)] text-[var(--color-sage-600)] focus:ring-[var(--color-sage-400)]" onChange={() => toggleList('todos', item.id)} type="checkbox" />
+                <div className="flex items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm" key={item.id}>
+                  <StatusButtons onChange={(status) => setListStatus('todos', item.id, status)} status={item.status} />
                   <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
                     <span className="text-sm text-[var(--color-ink)]">{item.label}</span>
                     <span className="rounded-full bg-[var(--color-rose-100)] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted)]">{taskLabel(item)}</span>
                   </div>
-                </label>
+                </div>
               )) : <p className="rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 text-sm text-[var(--color-muted)]">No saved tasks are due today.</p>}
             </div>
 
@@ -707,8 +892,8 @@ export default function JournalPage() {
 
               <div className="mt-4 space-y-3">
                 {journal.todayTasks.map((item, index) => (
-                  <div className="grid items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm sm:grid-cols-[24px_1fr]" key={item.id}>
-                    <input checked={item.checked} className="h-5 w-5 rounded border-[var(--color-sage-300)] text-[var(--color-sage-600)] focus:ring-[var(--color-sage-400)]" onChange={() => updateTodayTask(index, 'checked', !item.checked)} type="checkbox" />
+                  <div className="grid items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm sm:grid-cols-[88px_1fr]" key={item.id}>
+                    <StatusButtons onChange={(status) => updateTodayTask(index, 'status', status)} status={item.status} />
                     <input className="w-full border-none bg-transparent p-0 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-0" onChange={(event) => updateTodayTask(index, 'label', event.target.value)} placeholder="Write a one-time task for today" value={item.label} />
                   </div>
                 ))}

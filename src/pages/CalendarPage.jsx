@@ -10,8 +10,8 @@ import {
   Star,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import AppHeader from '../components/AppHeader.jsx'
 import OfflineBanner from '../components/OfflineBanner.jsx'
 import { apiRequest } from '../lib/api.js'
@@ -55,6 +55,7 @@ function repeatLabel(mode) {
 }
 
 export default function CalendarPage() {
+  const navigate = useNavigate()
   const [monthDate, setMonthDate] = useState(parseDateKey(todayKey()))
   const [selectedDate, setSelectedDate] = useState(todayKey())
   const [calendar, setCalendar] = useState({ entries: [], eventsByDate: {} })
@@ -63,6 +64,7 @@ export default function CalendarPage() {
   const [error, setError] = useState('')
   const [form, setForm] = useState(blankForm(todayKey()))
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const lastTapRef = useRef({ key: '', time: 0 })
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -186,6 +188,21 @@ export default function CalendarPage() {
     }))
   }
 
+  function openDay(dayKey) {
+    navigate(dayKey === todayKey() ? '/today' : `/journal/${dayKey}`)
+  }
+
+  function handleDayTouch(dayKey) {
+    const now = Date.now()
+    if (lastTapRef.current.key === dayKey && now - lastTapRef.current.time < 320) {
+      lastTapRef.current = { key: '', time: 0 }
+      openDay(dayKey)
+      return
+    }
+
+    lastTapRef.current = { key: dayKey, time: now }
+  }
+
   const primaryAction = form.id ? 'Save changes' : `Add ${categoryLabel(form.category)}`
 
   return (
@@ -235,6 +252,8 @@ export default function CalendarPage() {
                     className={`min-h-[80px] rounded-[18px] border p-2 text-left transition sm:min-h-[106px] sm:rounded-[24px] sm:p-3 ${selected ? 'border-[var(--color-sage-500)] bg-[var(--color-sage-100)] shadow-sm' : day.isInMonth ? 'border-white/70 bg-[var(--theme-white-88)] hover:border-[var(--color-sage-300)]' : 'border-transparent bg-white/30 text-[var(--color-muted)]'}`}
                     key={day.key}
                     onClick={() => setSelectedDate(day.key)}
+                    onDoubleClick={() => openDay(day.key)}
+                    onTouchEnd={() => handleDayTouch(day.key)}
                     type="button"
                   >
                     <div className="flex items-start justify-between gap-2">
