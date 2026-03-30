@@ -1021,7 +1021,6 @@ export default function JournalPage() {
             <div className="mt-6 border-t border-[var(--color-rose-200)] pt-6">
               <div>
                 <p className="font-display text-3xl leading-none text-[var(--color-ink)]">Today only</p>
-                <p className="mt-2 text-sm text-[var(--color-muted)]">New blank lines appear as you type so this section stays light.</p>
               </div>
 
               <div className="mt-4 space-y-3">
