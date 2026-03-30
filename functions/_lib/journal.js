@@ -425,7 +425,7 @@ export async function getTemplates(context, userId) {
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
     context.env.DB.prepare(
-      `SELECT id, label, behavior, interval_days FROM todo_items
+      `SELECT id, label, behavior, interval_days, created_at FROM todo_items
        WHERE user_id = ? AND is_active = 1
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
