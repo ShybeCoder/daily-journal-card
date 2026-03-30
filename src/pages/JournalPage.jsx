@@ -240,7 +240,11 @@ function AutoSizeTextarea({ onChange, onKeyDown, placeholder, textareaRef: regis
 }
 
 function SortableGrowingListItem({ index, item, onChange, onKeyDown, placeholder, registerRef }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+  const isBlank = !item.text.trim()
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+    disabled: isBlank,
+  })
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -256,7 +260,12 @@ function SortableGrowingListItem({ index, item, onChange, onKeyDown, placeholder
     >
       <button
         aria-label="Drag to reorder"
-        className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--theme-white-80)] text-[var(--color-muted)] transition hover:bg-white"
+        className={`flex h-10 w-10 items-center justify-center rounded-2xl transition ${
+          isBlank
+            ? 'bg-transparent text-transparent'
+            : 'bg-[var(--theme-white-80)] text-[var(--color-muted)] hover:bg-white'
+        }`}
+        disabled={isBlank}
         type="button"
         {...attributes}
         {...listeners}
@@ -280,8 +289,7 @@ function GrowingListField({ items, onChange, onReorder, placeholder }) {
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
   )
   const inputRefs = useRef({})
-  const filledItems = items.filter((item) => item.text.trim())
-  const blankItem = items.find((item) => !item.text.trim()) ?? null
+  const sortableItems = items.filter((item) => item.text.trim())
 
   function registerRef(id, element) {
     if (element) {
@@ -308,18 +316,18 @@ function GrowingListField({ items, onChange, onReorder, placeholder }) {
   function handleDragEnd(event) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const oldIndex = filledItems.findIndex((item) => item.id === active.id)
-    const newIndex = filledItems.findIndex((item) => item.id === over.id)
+    const oldIndex = sortableItems.findIndex((item) => item.id === active.id)
+    const newIndex = sortableItems.findIndex((item) => item.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
-    onReorder(arrayMove(filledItems, oldIndex, newIndex))
+    onReorder(arrayMove(sortableItems, oldIndex, newIndex))
     focusItem(active.id)
   }
 
   return (
     <div className="space-y-3">
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} sensors={sensors}>
-        <SortableContext items={filledItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
-          {filledItems.map((item, index) => (
+        <SortableContext items={sortableItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+          {items.map((item, index) => (
             <SortableGrowingListItem
               index={index}
               item={item}
@@ -332,18 +340,6 @@ function GrowingListField({ items, onChange, onReorder, placeholder }) {
           ))}
         </SortableContext>
       </DndContext>
-
-      {blankItem ? (
-        <div className="rounded-[24px] border border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] p-3 shadow-sm">
-          <AutoSizeTextarea
-            onChange={(event) => onChange(items.findIndex((item) => item.id === blankItem.id), event.target.value)}
-            onKeyDown={(event) => handleKeyDown(items.findIndex((item) => item.id === blankItem.id), event)}
-            placeholder={filledItems.length ? 'Add another line' : placeholder}
-            textareaRef={(element) => registerRef(blankItem.id, element)}
-            value={blankItem.text}
-          />
-        </div>
-      ) : null}
     </div>
   )
 }
