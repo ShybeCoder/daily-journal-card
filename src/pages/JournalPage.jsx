@@ -148,48 +148,111 @@ function taskLabel(task) {
   return 'Daily'
 }
 
-function TemplateEditor({ items, onAdd, onChange, onRemove, onSave, saving, taskMode = false }) {
+function SortableTemplateItem({ index, item, onChange, onRemove, registerRef, taskMode = false }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div
+      className={`grid gap-3 ${
+        taskMode
+          ? item.behavior === 'interval'
+            ? 'lg:grid-cols-[40px_1fr_170px_130px_44px]'
+            : 'lg:grid-cols-[40px_1fr_170px_44px]'
+          : 'lg:grid-cols-[40px_1fr_44px]'
+      }`}
+      ref={setNodeRef}
+      style={style}
+    >
+      <button
+        aria-label="Drag to reorder"
+        className="flex h-11 w-10 items-center justify-center rounded-2xl bg-[var(--theme-white-80)] text-[var(--color-muted)] transition hover:bg-white"
+        type="button"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <input
+        className={INPUT}
+        onChange={(event) => onChange(index, 'label', event.target.value)}
+        ref={(element) => registerRef(item.id, element)}
+        value={item.label}
+      />
+      {taskMode ? (
+        <>
+          <select className={INPUT} onChange={(event) => onChange(index, 'behavior', event.target.value)} value={item.behavior}>
+            <option value="daily">Daily task</option>
+            <option value="weekly">Every 7 days</option>
+            <option value="monthly">Monthly task</option>
+            <option value="interval">Every ___ days</option>
+          </select>
+          {item.behavior === 'interval' ? (
+            <input
+              className={INPUT}
+              min="1"
+              onChange={(event) => onChange(index, 'intervalDays', event.target.value)}
+              placeholder="Days"
+              type="number"
+              value={item.intervalDays}
+            />
+          ) : null}
+        </>
+      ) : null}
+      <button className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--color-rose-100)] text-[var(--color-ink)] transition hover:bg-[var(--color-rose-200)]" onClick={() => onRemove(index)} type="button">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  )
+}
+
+function TemplateEditor({ items, onAdd, onChange, onRemove, onReorder, onSave, saving, taskMode = false }) {
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+  )
+  const inputRefs = useRef({})
+
+  function registerRef(id, element) {
+    if (element) {
+      inputRefs.current[id] = element
+    } else {
+      delete inputRefs.current[id]
+    }
+  }
+
+  function handleDragEnd(event) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = items.findIndex((item) => item.id === active.id)
+    const newIndex = items.findIndex((item) => item.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    onReorder(arrayMove(items, oldIndex, newIndex))
+    window.requestAnimationFrame(() => inputRefs.current[active.id]?.focus())
+  }
+
   return (
     <div className="mt-5 rounded-[24px] border border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] p-4">
-      <div className="space-y-3">
-        {items.map((item, index) => (
-          <div
-            className={`grid gap-3 ${
-              taskMode
-                ? item.behavior === 'interval'
-                  ? 'lg:grid-cols-[1fr_170px_130px_44px]'
-                  : 'lg:grid-cols-[1fr_170px_44px]'
-                : 'lg:grid-cols-[1fr_44px]'
-            }`}
-            key={item.id}
-          >
-            <input className={INPUT} onChange={(event) => onChange(index, 'label', event.target.value)} value={item.label} />
-            {taskMode ? (
-              <>
-                <select className={INPUT} onChange={(event) => onChange(index, 'behavior', event.target.value)} value={item.behavior}>
-                  <option value="daily">Daily task</option>
-                  <option value="weekly">Every 7 days</option>
-                  <option value="monthly">Monthly task</option>
-                  <option value="interval">Every ___ days</option>
-                </select>
-                {item.behavior === 'interval' ? (
-                  <input
-                    className={INPUT}
-                    min="1"
-                    onChange={(event) => onChange(index, 'intervalDays', event.target.value)}
-                    placeholder="Days"
-                    type="number"
-                    value={item.intervalDays}
-                  />
-                ) : null}
-              </>
-            ) : null}
-            <button className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--color-rose-100)] text-[var(--color-ink)] transition hover:bg-[var(--color-rose-200)]" onClick={() => onRemove(index)} type="button">
-              <X className="h-4 w-4" />
-            </button>
+      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} sensors={sensors}>
+        <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-3">
+            {items.map((item, index) => (
+              <SortableTemplateItem
+                index={index}
+                item={item}
+                key={item.id}
+                onChange={onChange}
+                onRemove={onRemove}
+                registerRef={registerRef}
+                taskMode={taskMode}
+              />
+            ))}
           </div>
-        ))}
-      </div>
+        </SortableContext>
+      </DndContext>
       <div className="mt-4 flex flex-wrap gap-3">
         <button className="rounded-full bg-[var(--color-sand)] px-4 py-2 text-sm font-medium text-[var(--color-ink)] transition hover:bg-white" onClick={onAdd} type="button">
           Add item
@@ -840,6 +903,7 @@ export default function JournalPage() {
                 onAdd={() => setRoutineDraft((current) => [...current, { id: crypto.randomUUID(), label: '' }])}
                 onChange={(index, field, value) => updateDraft(setRoutineDraft, index, field, value)}
                 onRemove={(index) => setRoutineDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                onReorder={(items) => setRoutineDraft(items)}
                 onSave={() => saveTemplates('routine')}
                 saving={templateBusy}
               />
@@ -874,6 +938,7 @@ export default function JournalPage() {
                 onAdd={() => setTodoDraft((current) => [...current, { id: crypto.randomUUID(), label: '', behavior: 'daily', intervalDays: 7 }])}
                 onChange={(index, field, value) => updateDraft(setTodoDraft, index, field, value)}
                 onRemove={(index) => setTodoDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                onReorder={(items) => setTodoDraft(items)}
                 onSave={() => saveTemplates('todo')}
                 saving={templateBusy}
                 taskMode
