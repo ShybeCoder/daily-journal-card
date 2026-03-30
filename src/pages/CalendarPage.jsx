@@ -192,7 +192,18 @@ export default function CalendarPage() {
     navigate(dayKey === todayKey() ? '/today' : `/journal/${dayKey}`)
   }
 
-  function handleDayTouch(dayKey) {
+  function handleDayClick(event, dayKey) {
+    setSelectedDate(dayKey)
+
+    if (event.detail >= 2) {
+      openDay(dayKey)
+    }
+  }
+
+  function handleDayTouch(event, dayKey) {
+    event.preventDefault()
+    setSelectedDate(dayKey)
+
     const now = Date.now()
     if (lastTapRef.current.key === dayKey && now - lastTapRef.current.time < 320) {
       lastTapRef.current = { key: '', time: 0 }
@@ -217,7 +228,7 @@ export default function CalendarPage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="font-display text-5xl leading-none text-[var(--color-ink)]">{monthLabel(monthDate)}</p>
-                <p className="mt-2 text-sm text-[var(--color-muted)]">Tap a day to see that card, add a date, or check what is coming up.</p>
+                <p className="mt-2 text-sm text-[var(--color-muted)]">Tap a day to select it, or double tap or double click to open that journal card.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button className="inline-flex items-center gap-2 rounded-full bg-[color:var(--theme-surface)] px-4 py-2 text-sm font-medium text-[var(--color-ink)] transition hover:bg-white" onClick={() => setMonthDate((current) => shiftMonth(current, -1))} type="button"><ChevronLeft className="h-4 w-4" />Previous</button>
@@ -249,11 +260,10 @@ export default function CalendarPage() {
                 const reminders = calendar.eventsByDate?.[day.key] ?? []
                 return (
                   <button
-                    className={`min-h-[80px] rounded-[18px] border p-2 text-left transition sm:min-h-[106px] sm:rounded-[24px] sm:p-3 ${selected ? 'border-[var(--color-sage-500)] bg-[var(--color-sage-100)] shadow-sm' : day.isInMonth ? 'border-white/70 bg-[var(--theme-white-88)] hover:border-[var(--color-sage-300)]' : 'border-transparent bg-white/30 text-[var(--color-muted)]'}`}
+                    className={`touch-manipulation min-h-[80px] rounded-[18px] border p-2 text-left transition sm:min-h-[106px] sm:rounded-[24px] sm:p-3 ${selected ? 'border-[var(--color-sage-500)] bg-[var(--color-sage-100)] shadow-sm' : day.isInMonth ? 'border-white/70 bg-[var(--theme-white-88)] hover:border-[var(--color-sage-300)]' : 'border-transparent bg-white/30 text-[var(--color-muted)]'}`}
                     key={day.key}
-                    onClick={() => setSelectedDate(day.key)}
-                    onDoubleClick={() => openDay(day.key)}
-                    onTouchEnd={() => handleDayTouch(day.key)}
+                    onClick={(event) => handleDayClick(event, day.key)}
+                    onTouchEnd={(event) => handleDayTouch(event, day.key)}
                     type="button"
                   >
                     <div className="flex items-start justify-between gap-2">
