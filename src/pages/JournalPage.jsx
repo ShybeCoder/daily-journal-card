@@ -695,7 +695,6 @@ export default function JournalPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <div className="rounded-full bg-[var(--color-sage-100)] px-4 py-2 text-sm text-[var(--color-ink)]">{saveState === 'saving' ? 'Saving...' : saveState === 'error' ? 'Save paused' : 'Saved'}</div>
-              <div className="rounded-full bg-[var(--color-rose-100)] px-4 py-2 text-sm text-[var(--color-ink)]">{formatLongDate(dateKey)}</div>
             </div>
           </div>
 
@@ -703,7 +702,9 @@ export default function JournalPage() {
             <div className="rounded-[28px] border border-[var(--color-sage-200)] bg-[linear-gradient(180deg,var(--theme-white-95),color-mix(in srgb, var(--color-sage-100) 60%, var(--theme-surface)))] p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="font-display text-5xl leading-none text-[var(--color-ink)]">{dateKey === todayKey() ? 'Today' : 'Journal card'}</p>
+                  <p className="font-display text-5xl leading-none text-[var(--color-ink)] sm:text-6xl">
+                    {formatLongDate(dateKey)}
+                  </p>
                   <p className="mt-2 max-w-2xl text-sm text-[var(--color-muted)]">Your card saves as you write, so you can move through the day without stopping to think about saving.</p>
                 </div>
                 <div className="hidden h-16 w-16 items-center justify-center rounded-[24px] bg-[radial-gradient(circle_at_top,var(--color-rose-100),transparent_55%),var(--color-sage-500)] text-white shadow-sm sm:flex">
