@@ -359,7 +359,7 @@ function StatusButtons({ onChange, status }) {
         className={`${buttonBase} ${
           status === 'done'
             ? 'border-[var(--color-sage-600)] bg-[var(--color-sage-600)] text-white'
-            : 'border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] text-[var(--color-ink)] hover:border-[var(--color-sage-400)]'
+            : 'border-[var(--color-sage-300)] bg-[color:var(--theme-surface)] text-[var(--color-ink)] hover:border-[var(--color-sage-500)]'
         }`}
         onClick={() => onChange(status === 'done' ? null : 'done')}
         type="button"
@@ -370,8 +370,8 @@ function StatusButtons({ onChange, status }) {
         aria-label="Mark not done"
         className={`${buttonBase} ${
           status === 'skipped'
-            ? 'border-[var(--color-rose-400)] bg-[var(--color-rose-200)] text-[var(--color-ink)]'
-            : 'border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] text-[var(--color-ink)] hover:border-[var(--color-rose-300)]'
+            ? 'border-[var(--color-rose-500)] bg-[var(--color-rose-200)] text-[var(--color-ink)]'
+            : 'border-[var(--color-rose-300)] bg-[var(--color-rose-100)] text-[var(--color-rose-600)] hover:border-[var(--color-rose-500)]'
         }`}
         onClick={() => onChange(status === 'skipped' ? null : 'skipped')}
         type="button"

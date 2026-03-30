@@ -249,25 +249,21 @@ function occursOnDate(event, dateKey) {
   return event.event_date === dateKey
 }
 
-function dueTask(todo, lastDoneDate, dateKey) {
-  if (!lastDoneDate || lastDoneDate === dateKey) {
-    return true
-  }
-
-  if (todo.behavior === 'daily') {
-    return true
+function scheduledTaskDate(todo, baseDate, dateKey) {
+  if (!baseDate || dateKey < baseDate) {
+    return false
   }
 
   if (todo.behavior === 'weekly') {
-    return dayDiff(dateKey, lastDoneDate) >= 7
+    return dayDiff(dateKey, baseDate) % 7 === 0
   }
 
   if (todo.behavior === 'monthly') {
-    return dateKey.slice(0, 7) !== lastDoneDate.slice(0, 7)
+    return occurrenceForMonth(baseDate, dateKey.slice(0, 7)) === dateKey
   }
 
   const intervalDays = Math.max(1, todo.interval_days || 0)
-  return dayDiff(dateKey, lastDoneDate) >= intervalDays
+  return dayDiff(dateKey, baseDate) % intervalDays === 0
 }
 
 function taskState(todo, history, currentChecks, dateKey) {
@@ -281,15 +277,21 @@ function taskState(todo, history, currentChecks, dateKey) {
     return { status: currentStatus, isVisible: true }
   }
 
-  const lastDone = history.find((row) => normalizeCheckStatus(row.todoChecks[todo.id]) === 'done')?.entryDate ?? null
+  const lastAction = history.find((row) => normalizeCheckStatus(row.todoChecks[todo.id]))
+  const lastActionStatus = normalizeCheckStatus(lastAction?.todoChecks?.[todo.id])
+  const baseDate = lastAction
+    ? lastActionStatus === 'skipped'
+      ? addDays(lastAction.entryDate, 1)
+      : lastAction.entryDate
+    : todo.created_at.slice(0, 10)
 
-  if (!lastDone) {
-    return { status: null, isVisible: true }
+  if (!baseDate) {
+    return { status: null, isVisible: false }
   }
 
   return {
     status: null,
-    isVisible: dueTask(todo, lastDone, dateKey),
+    isVisible: scheduledTaskDate(todo, baseDate, dateKey),
   }
 }
 
@@ -379,7 +381,7 @@ export async function ensureSeedData(context, userId) {
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
     context.env.DB.prepare(
-      `SELECT id, label, behavior, interval_days FROM todo_items
+      `SELECT id, label, behavior, interval_days, created_at FROM todo_items
        WHERE user_id = ? AND is_active = 1
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
