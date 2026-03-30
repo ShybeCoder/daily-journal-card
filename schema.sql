@@ -2,6 +2,8 @@ CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
+  security_question_key TEXT NOT NULL DEFAULT '',
+  security_answer_hash TEXT NOT NULL DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -82,8 +84,34 @@ CREATE TABLE IF NOT EXISTS user_settings (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS passkeys (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  credential_id TEXT UNIQUE NOT NULL,
+  public_key TEXT NOT NULL,
+  counter INTEGER NOT NULL DEFAULT 0,
+  transports TEXT NOT NULL DEFAULT '[]',
+  device_type TEXT NOT NULL DEFAULT 'singleDevice',
+  backed_up INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS auth_challenges (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL DEFAULT '',
+  purpose TEXT NOT NULL,
+  challenge TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_journal_entries_user_date ON journal_entries(user_id, entry_date);
 CREATE INDEX IF NOT EXISTS idx_routine_items_user_id ON routine_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_todo_items_user_id ON todo_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_calendar_events_user_date ON calendar_events(user_id, event_date);
+CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON passkeys(user_id);
+CREATE INDEX IF NOT EXISTS idx_passkeys_credential_id ON passkeys(credential_id);
+CREATE INDEX IF NOT EXISTS idx_auth_challenges_purpose ON auth_challenges(purpose, expires_at);

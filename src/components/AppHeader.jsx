@@ -43,7 +43,7 @@ export default function AppHeader({ title, subtitle }) {
               type="button"
             >
               <Settings2 className="h-4 w-4" />
-              Theme
+              Settings
             </button>
             <button
               className="inline-flex items-center gap-2 rounded-full bg-[var(--color-rose-200)] px-4 py-2 text-sm font-medium text-[var(--color-ink)] transition hover:bg-[var(--color-rose-300)]"

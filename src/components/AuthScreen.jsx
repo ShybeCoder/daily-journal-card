@@ -1,18 +1,63 @@
-import { LockKeyhole, NotebookPen, Sparkles } from 'lucide-react'
+import {
+  Fingerprint,
+  KeyRound,
+  LockKeyhole,
+  NotebookPen,
+  Sparkles,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { SECURITY_QUESTIONS } from '../../shared/securityQuestions.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import PasswordField from './PasswordField.jsx'
 
 const INPUT_CLASS =
   'w-full rounded-2xl border border-[var(--color-sage-200)] bg-white px-4 py-3 text-base text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-sage-500)] focus:outline-none focus:ring-4 focus:ring-[color:rgba(90,111,87,0.15)]'
 
+const EMPTY_REGISTER_FORM = {
+  email: '',
+  password: '',
+  securityQuestionKey: SECURITY_QUESTIONS[0].key,
+  securityAnswer: '',
+}
+
+const EMPTY_RECOVERY_FORM = {
+  email: '',
+  answer: '',
+  newPassword: '',
+  confirmPassword: '',
+}
+
 export default function AuthScreen() {
   const navigate = useNavigate()
-  const { login, register } = useAuth()
+  const {
+    completePasswordRecovery,
+    login,
+    loginWithPasskey,
+    register,
+    startPasswordRecovery,
+  } = useAuth()
   const [mode, setMode] = useState('login')
-  const [form, setForm] = useState({ email: '', password: '' })
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+  const [registerForm, setRegisterForm] = useState(EMPTY_REGISTER_FORM)
+  const [recoveryForm, setRecoveryForm] = useState(EMPTY_RECOVERY_FORM)
+  const [recoveryQuestion, setRecoveryQuestion] = useState(null)
+  const [showLoginPassword, setShowLoginPassword] = useState(false)
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false)
+  const [showRecoveryPassword, setShowRecoveryPassword] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [passkeyBusy, setPasskeyBusy] = useState(false)
   const [error, setError] = useState('')
+
+  const supportsPasskeys =
+    typeof window !== 'undefined' && Boolean(window.PublicKeyCredential)
+
+  function switchMode(nextMode) {
+    setMode(nextMode)
+    setError('')
+    setRecoveryQuestion(null)
+    setRecoveryForm(EMPTY_RECOVERY_FORM)
+  }
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -21,9 +66,16 @@ export default function AuthScreen() {
 
     try {
       if (mode === 'login') {
-        await login(form)
+        await login(loginForm)
+      } else if (mode === 'register') {
+        await register(registerForm)
+      } else if (!recoveryQuestion) {
+        const data = await startPasswordRecovery({ email: recoveryForm.email })
+        setRecoveryQuestion(data)
+        setBusy(false)
+        return
       } else {
-        await register(form)
+        await completePasswordRecovery(recoveryForm)
       }
 
       navigate('/today', { replace: true })
@@ -33,6 +85,29 @@ export default function AuthScreen() {
       setBusy(false)
     }
   }
+
+  async function handlePasskeyLogin() {
+    setPasskeyBusy(true)
+    setError('')
+
+    try {
+      await loginWithPasskey()
+      navigate('/today', { replace: true })
+    } catch (passkeyError) {
+      setError(passkeyError.message)
+    } finally {
+      setPasskeyBusy(false)
+    }
+  }
+
+  const submitLabel =
+    mode === 'login'
+      ? 'Log in'
+      : mode === 'register'
+        ? 'Create account'
+        : recoveryQuestion
+          ? 'Reset password'
+          : 'Show my question'
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,#f8d9bc,transparent_28%),radial-gradient(circle_at_top_right,#dae6d6,transparent_30%),linear-gradient(180deg,#f7efe1_0%,#f3ead8_100%)]">
@@ -89,7 +164,9 @@ export default function AuthScreen() {
                   Daily Journal Card
                 </p>
                 <p className="mt-2 text-sm text-[var(--color-muted)]">
-                  Sign in to open today&apos;s card.
+                  {mode === 'forgot'
+                    ? 'Answer your security question to reset your password.'
+                    : "Sign in to open today's card."}
                 </p>
               </div>
               <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[radial-gradient(circle_at_top,#f9e4cb,transparent_60%),var(--color-sage-500)] text-white shadow-sm">
@@ -100,11 +177,11 @@ export default function AuthScreen() {
             <div className="mt-8 inline-flex rounded-full bg-[var(--color-sand)] p-1">
               <button
                 className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                  mode === 'login'
+                  mode === 'login' || mode === 'forgot'
                     ? 'bg-white text-[var(--color-ink)] shadow-sm'
                     : 'text-[var(--color-muted)]'
                 }`}
-                onClick={() => setMode('login')}
+                onClick={() => switchMode('login')}
                 type="button"
               >
                 Log in
@@ -115,7 +192,7 @@ export default function AuthScreen() {
                     ? 'bg-white text-[var(--color-ink)] shadow-sm'
                     : 'text-[var(--color-muted)]'
                 }`}
-                onClick={() => setMode('register')}
+                onClick={() => switchMode('register')}
                 type="button"
               >
                 Create account
@@ -123,40 +200,195 @@ export default function AuthScreen() {
             </div>
 
             <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-[var(--color-ink)]">
-                  Email
-                </span>
-                <input
-                  className={INPUT_CLASS}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      email: event.target.value,
-                    }))
-                  }
-                  placeholder="you@example.com"
-                  type="email"
-                  value={form.email}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-[var(--color-ink)]">
-                  Password
-                </span>
-                <input
-                  className={INPUT_CLASS}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      password: event.target.value,
-                    }))
-                  }
-                  placeholder="At least 8 characters"
-                  type="password"
-                  value={form.password}
-                />
-              </label>
+              {mode === 'login' ? (
+                <>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-[var(--color-ink)]">
+                      Email
+                    </span>
+                    <input
+                      className={INPUT_CLASS}
+                      onChange={(event) =>
+                        setLoginForm((current) => ({
+                          ...current,
+                          email: event.target.value,
+                        }))
+                      }
+                      placeholder="you@example.com"
+                      type="email"
+                      value={loginForm.email}
+                    />
+                  </label>
+                  <PasswordField
+                    autoComplete="current-password"
+                    label="Password"
+                    onChange={(event) =>
+                      setLoginForm((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }))
+                    }
+                    onToggle={() => setShowLoginPassword((current) => !current)}
+                    placeholder="At least 8 characters"
+                    value={loginForm.password}
+                    visible={showLoginPassword}
+                  />
+                </>
+              ) : null}
+
+              {mode === 'register' ? (
+                <>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-[var(--color-ink)]">
+                      Email
+                    </span>
+                    <input
+                      className={INPUT_CLASS}
+                      onChange={(event) =>
+                        setRegisterForm((current) => ({
+                          ...current,
+                          email: event.target.value,
+                        }))
+                      }
+                      placeholder="you@example.com"
+                      type="email"
+                      value={registerForm.email}
+                    />
+                  </label>
+                  <PasswordField
+                    autoComplete="new-password"
+                    label="Password"
+                    onChange={(event) =>
+                      setRegisterForm((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }))
+                    }
+                    onToggle={() => setShowRegisterPassword((current) => !current)}
+                    placeholder="At least 8 characters"
+                    value={registerForm.password}
+                    visible={showRegisterPassword}
+                  />
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-[var(--color-ink)]">
+                      Security question
+                    </span>
+                    <select
+                      className={INPUT_CLASS}
+                      onChange={(event) =>
+                        setRegisterForm((current) => ({
+                          ...current,
+                          securityQuestionKey: event.target.value,
+                        }))
+                      }
+                      value={registerForm.securityQuestionKey}
+                    >
+                      {SECURITY_QUESTIONS.map((question) => (
+                        <option key={question.key} value={question.key}>
+                          {question.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-[var(--color-ink)]">
+                      Answer
+                    </span>
+                    <input
+                      className={INPUT_CLASS}
+                      onChange={(event) =>
+                        setRegisterForm((current) => ({
+                          ...current,
+                          securityAnswer: event.target.value,
+                        }))
+                      }
+                      placeholder="Your answer"
+                      type="text"
+                      value={registerForm.securityAnswer}
+                    />
+                  </label>
+                </>
+              ) : null}
+
+              {mode === 'forgot' ? (
+                <>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-[var(--color-ink)]">
+                      Email
+                    </span>
+                    <input
+                      className={INPUT_CLASS}
+                      onChange={(event) =>
+                        setRecoveryForm((current) => ({
+                          ...current,
+                          email: event.target.value,
+                        }))
+                      }
+                      placeholder="you@example.com"
+                      type="email"
+                      value={recoveryForm.email}
+                    />
+                  </label>
+
+                  {recoveryQuestion ? (
+                    <>
+                      <div className="rounded-2xl border border-[var(--color-sage-200)] bg-[var(--theme-panel)] px-4 py-3 text-sm text-[var(--color-ink)]">
+                        <p className="font-medium text-[var(--color-ink)]">
+                          Security question
+                        </p>
+                        <p className="mt-1 text-[var(--color-muted)]">
+                          {recoveryQuestion.questionLabel}
+                        </p>
+                      </div>
+                      <label className="block">
+                        <span className="mb-2 block text-sm font-medium text-[var(--color-ink)]">
+                          Answer
+                        </span>
+                        <input
+                          className={INPUT_CLASS}
+                          onChange={(event) =>
+                            setRecoveryForm((current) => ({
+                              ...current,
+                              answer: event.target.value,
+                            }))
+                          }
+                          placeholder="Your answer"
+                          type="text"
+                          value={recoveryForm.answer}
+                        />
+                      </label>
+                      <PasswordField
+                        autoComplete="new-password"
+                        label="New password"
+                        onChange={(event) =>
+                          setRecoveryForm((current) => ({
+                            ...current,
+                            newPassword: event.target.value,
+                          }))
+                        }
+                        onToggle={() => setShowRecoveryPassword((current) => !current)}
+                        placeholder="At least 8 characters"
+                        value={recoveryForm.newPassword}
+                        visible={showRecoveryPassword}
+                      />
+                      <PasswordField
+                        autoComplete="new-password"
+                        label="Confirm new password"
+                        onChange={(event) =>
+                          setRecoveryForm((current) => ({
+                            ...current,
+                            confirmPassword: event.target.value,
+                          }))
+                        }
+                        onToggle={() => setShowRecoveryPassword((current) => !current)}
+                        placeholder="Type it again"
+                        value={recoveryForm.confirmPassword}
+                        visible={showRecoveryPassword}
+                      />
+                    </>
+                  ) : null}
+                </>
+              ) : null}
 
               {error ? (
                 <div className="rounded-2xl border border-[var(--color-rose-300)] bg-[var(--color-rose-100)] px-4 py-3 text-sm text-[var(--color-ink)]">
@@ -170,13 +402,57 @@ export default function AuthScreen() {
                 type="submit"
               >
                 <LockKeyhole className="h-4 w-4" />
-                {busy
-                  ? 'Opening your journal...'
-                  : mode === 'login'
-                    ? 'Log in'
-                    : 'Create account'}
+                {busy ? 'One moment...' : submitLabel}
               </button>
+
+              {mode === 'login' ? (
+                <div className="space-y-3">
+                  <button
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--color-sage-200)] bg-white px-4 py-3 text-base font-medium text-[var(--color-ink)] transition hover:bg-[var(--theme-panel)] disabled:cursor-not-allowed disabled:opacity-70"
+                    disabled={!supportsPasskeys || passkeyBusy}
+                    onClick={handlePasskeyLogin}
+                    type="button"
+                  >
+                    <Fingerprint className="h-4 w-4" />
+                    {passkeyBusy ? 'Checking your passkey...' : 'Use a passkey'}
+                  </button>
+                  <button
+                    className="text-sm font-medium text-[var(--color-sage-700)] transition hover:text-[var(--color-ink)]"
+                    onClick={() => switchMode('forgot')}
+                    type="button"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              ) : null}
+
+              {mode === 'forgot' ? (
+                <button
+                  className="text-sm font-medium text-[var(--color-sage-700)] transition hover:text-[var(--color-ink)]"
+                  onClick={() => switchMode('login')}
+                  type="button"
+                >
+                  Back to log in
+                </button>
+              ) : null}
             </form>
+
+            <div className="mt-6 rounded-[28px] border border-[var(--color-sage-200)] bg-[var(--theme-panel)] p-4 text-sm text-[var(--color-muted)]">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-2xl bg-white p-2 text-[var(--color-sage-600)]">
+                  {mode === 'register' ? (
+                    <KeyRound className="h-4 w-4" />
+                  ) : (
+                    <Fingerprint className="h-4 w-4" />
+                  )}
+                </div>
+                <p>
+                  {mode === 'register'
+                    ? 'Pick a security question now so the forgot-password button can help you later.'
+                    : 'Passkeys are optional, so you can still use your email and password whenever you want.'}
+                </p>
+              </div>
+            </div>
           </div>
         </section>
       </div>

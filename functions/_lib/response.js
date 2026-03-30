@@ -1,9 +1,12 @@
 export function json(data, init = {}) {
+  const headers = new Headers(init.headers ?? {})
+
+  if (!headers.has('Cache-Control')) {
+    headers.set('Cache-Control', 'no-store')
+  }
+
   return Response.json(data, {
-    headers: {
-      'Cache-Control': 'no-store',
-      ...(init.headers ?? {}),
-    },
+    headers,
     ...init,
   })
 }
