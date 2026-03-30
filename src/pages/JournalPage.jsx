@@ -19,6 +19,8 @@ import {
   CalendarHeart,
   CalendarPlus2,
   Check,
+  ChevronDown,
+  ChevronUp,
   GripVertical,
   Star,
   X,
@@ -139,6 +141,18 @@ function nutritionTotals(foodLog) {
     })
   })
   return totals
+}
+
+function mealHasContent(meal) {
+  if (!meal) return false
+
+  return Boolean(
+    meal.name?.trim() ||
+      meal.calories?.toString().trim() ||
+      meal.carbs?.toString().trim() ||
+      meal.protein?.toString().trim() ||
+      meal.fats?.toString().trim(),
+  )
 }
 
 function taskLabel(task) {
@@ -451,6 +465,7 @@ export default function JournalPage() {
   const [saveState, setSaveState] = useState('idle')
   const [showRoutineEditor, setShowRoutineEditor] = useState(false)
   const [showTodoEditor, setShowTodoEditor] = useState(false)
+  const [expandedMeals, setExpandedMeals] = useState({})
   const [routineDraft, setRoutineDraft] = useState([])
   const [todoDraft, setTodoDraft] = useState([])
   const [templateBusy, setTemplateBusy] = useState(false)
@@ -575,6 +590,13 @@ export default function JournalPage() {
           },
         },
       },
+    }))
+  }
+
+  function toggleMeal(slot) {
+    setExpandedMeals((current) => ({
+      ...current,
+      [slot]: !current[slot],
     }))
   }
 
@@ -743,26 +765,76 @@ export default function JournalPage() {
         {activeTab === 'food-water' ? (
           <div className="space-y-6">
             <Section title="Food">
-              <div className="grid gap-4 xl:grid-cols-2">
+              <div className="space-y-4">
                 {FOOD_FIELDS.map(([slot, label]) => (
-                  <div className="rounded-[24px] border border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] p-4 shadow-sm" key={slot}>
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-medium uppercase tracking-[0.18em] text-[var(--color-muted)]">{label}</span>
-                      <input className={INPUT} onChange={(event) => updateFood(slot, 'name', event.target.value)} placeholder="What did you eat?" value={journal.entry.foodLog[slot].name} />
-                    </label>
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      {[
-                        ['calories', 'Calories'],
-                        ['carbs', 'Carbs'],
-                        ['protein', 'Protein'],
-                        ['fats', 'Fats'],
-                      ].map(([field, fieldLabel]) => (
-                        <label className="block" key={field}>
-                          <span className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--color-muted)]">{fieldLabel}</span>
-                          <input className={INPUT} inputMode="decimal" onChange={(event) => updateFood(slot, field, event.target.value)} value={journal.entry.foodLog[slot][field]} />
+                  <div
+                    className="overflow-hidden rounded-[24px] border border-[var(--color-sage-200)] bg-[color:var(--theme-surface)] shadow-sm"
+                    key={slot}
+                  >
+                    <button
+                      className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-[var(--color-sage-100)]"
+                      onClick={() => toggleMeal(slot)}
+                      type="button"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--color-muted)]">
+                          {label}
+                        </p>
+                        {mealHasContent(journal.entry.foodLog[slot]) ? (
+                          <p className="mt-1 truncate text-sm text-[var(--color-ink)]">
+                            {journal.entry.foodLog[slot].name?.trim() || 'Meal saved'}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {mealHasContent(journal.entry.foodLog[slot]) ? (
+                          <span className="rounded-full bg-[var(--color-rose-100)] px-3 py-1 text-xs font-medium text-[var(--color-ink)]">
+                            Saved
+                          </span>
+                        ) : null}
+                        {expandedMeals[slot] ? (
+                          <ChevronUp className="h-5 w-5 shrink-0 text-[var(--color-muted)]" />
+                        ) : (
+                          <ChevronDown className="h-5 w-5 shrink-0 text-[var(--color-muted)]" />
+                        )}
+                      </div>
+                    </button>
+
+                    {expandedMeals[slot] ? (
+                      <div className="border-t border-[var(--color-sage-200)] px-4 py-4">
+                        <label className="block">
+                          <span className="mb-2 block text-sm font-medium text-[var(--color-ink)]">
+                            What did you eat?
+                          </span>
+                          <input
+                            className={INPUT}
+                            onChange={(event) => updateFood(slot, 'name', event.target.value)}
+                            placeholder="What did you eat?"
+                            value={journal.entry.foodLog[slot].name}
+                          />
                         </label>
-                      ))}
-                    </div>
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                          {[
+                            ['calories', 'Calories'],
+                            ['carbs', 'Carbs'],
+                            ['protein', 'Protein'],
+                            ['fats', 'Fats'],
+                          ].map(([field, fieldLabel]) => (
+                            <label className="block" key={field}>
+                              <span className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--color-muted)]">
+                                {fieldLabel}
+                              </span>
+                              <input
+                                className={INPUT}
+                                inputMode="decimal"
+                                onChange={(event) => updateFood(slot, field, event.target.value)}
+                                value={journal.entry.foodLog[slot][field]}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>
