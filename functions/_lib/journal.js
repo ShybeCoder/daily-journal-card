@@ -266,10 +266,10 @@ function scheduledTaskDate(todo, baseDate, dateKey) {
   return dayDiff(dateKey, baseDate) % intervalDays === 0
 }
 
-function taskState(todo, history, currentChecks, dateKey) {
-  const currentStatus = normalizeCheckStatus(currentChecks[todo.id])
+function taskState(item, history, currentChecks, dateKey, checkField = 'todoChecks') {
+  const currentStatus = normalizeCheckStatus(currentChecks[item.id])
 
-  if (todo.behavior === 'daily') {
+  if (item.behavior === 'daily') {
     return { status: currentStatus, isVisible: true }
   }
 
@@ -277,13 +277,13 @@ function taskState(todo, history, currentChecks, dateKey) {
     return { status: currentStatus, isVisible: true }
   }
 
-  const lastAction = history.find((row) => normalizeCheckStatus(row.todoChecks[todo.id]))
-  const lastActionStatus = normalizeCheckStatus(lastAction?.todoChecks?.[todo.id])
+  const lastAction = history.find((row) => normalizeCheckStatus(row[checkField]?.[item.id]))
+  const lastActionStatus = normalizeCheckStatus(lastAction?.[checkField]?.[item.id])
   const baseDate = lastAction
     ? lastActionStatus === 'skipped'
       ? addDays(lastAction.entryDate, 1)
       : lastAction.entryDate
-    : todo.created_at.slice(0, 10)
+    : item.created_at.slice(0, 10)
 
   if (!baseDate) {
     return { status: null, isVisible: false }
@@ -291,7 +291,7 @@ function taskState(todo, history, currentChecks, dateKey) {
 
   return {
     status: null,
-    isVisible: scheduledTaskDate(todo, baseDate, dateKey),
+    isVisible: scheduledTaskDate(item, baseDate, dateKey),
   }
 }
 
@@ -376,7 +376,7 @@ export function isMonthKey(value) {
 export async function ensureSeedData(context, userId) {
   const [routineRows, todoRows] = await Promise.all([
     context.env.DB.prepare(
-      `SELECT id, label FROM routine_items
+      `SELECT id, label, behavior, interval_days, created_at FROM routine_items
        WHERE user_id = ? AND is_active = 1
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
@@ -420,7 +420,7 @@ export async function getTemplates(context, userId) {
 
   const [routines, todos] = await Promise.all([
     context.env.DB.prepare(
-      `SELECT id, label FROM routine_items
+      `SELECT id, label, behavior, interval_days, created_at FROM routine_items
        WHERE user_id = ? AND is_active = 1
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
@@ -442,7 +442,7 @@ export async function loadJournalDay(context, userId, dateKey) {
   const [entryRow, historyRows, eventRows] = await Promise.all([
     context.env.DB.prepare('SELECT * FROM journal_entries WHERE user_id = ? AND entry_date = ?').bind(userId, dateKey).first(),
     context.env.DB.prepare(
-      `SELECT entry_date, todo_checks FROM journal_entries
+      `SELECT entry_date, routine_checks, todo_checks FROM journal_entries
        WHERE user_id = ? AND entry_date <= ?
        ORDER BY entry_date DESC`,
     ).bind(userId, dateKey).all(),
@@ -479,6 +479,7 @@ export async function loadJournalDay(context, userId, dateKey) {
   const currentTodoChecks = safeJson(entryRow?.todo_checks, {})
   const history = historyRows.results.map((row) => ({
     entryDate: row.entry_date,
+    routineChecks: safeJson(row.routine_checks, {}),
     todoChecks: safeJson(row.todo_checks, {}),
   }))
 
@@ -514,10 +515,12 @@ export async function loadJournalDay(context, userId, dateKey) {
   return {
     date: dateKey,
     entry,
-    routines: templates.routines.map((item) => ({
-      ...item,
-      status: normalizeCheckStatus(routineChecks[item.id]),
-    })),
+    routines: templates.routines
+      .map((item) => ({
+        ...item,
+        ...taskState(item, history, routineChecks, dateKey, 'routineChecks'),
+      }))
+      .filter((item) => item.isVisible),
     todos: templates.todos
       .map((item) => ({
         ...item,
@@ -599,7 +602,12 @@ export async function saveJournalDay(context, userId, dateKey, payload) {
 export async function saveTemplates(context, userId, payload) {
   await ensureSeedData(context, userId)
   const routines = (Array.isArray(payload?.routines) ? payload.routines : [])
-    .map((item) => ({ id: item.id || crypto.randomUUID(), label: trimText(item.label, 160).trim() }))
+    .map((item) => ({
+      id: item.id || crypto.randomUUID(),
+      label: trimText(item.label, 160).trim(),
+      behavior: ['daily', 'weekly', 'monthly', 'interval'].includes(item.behavior) ? item.behavior : 'daily',
+      intervalDays: Math.max(1, Number.parseInt(item.intervalDays, 10) || 7),
+    }))
     .filter((item) => item.label)
   const todos = (Array.isArray(payload?.todos) ? payload.todos : [])
     .map((item) => ({
@@ -623,10 +631,16 @@ export async function saveTemplates(context, userId, payload) {
   routines.forEach((item, index) => {
     statements.push(
       context.env.DB.prepare(
-        `INSERT INTO routine_items (id, user_id, label, sort_order, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 1, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET label = excluded.label, sort_order = excluded.sort_order, is_active = 1, updated_at = excluded.updated_at`,
-      ).bind(item.id, userId, item.label, index, now, now),
+        `INSERT INTO routine_items (id, user_id, label, behavior, interval_days, sort_order, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           label = excluded.label,
+           behavior = excluded.behavior,
+           interval_days = excluded.interval_days,
+           sort_order = excluded.sort_order,
+           is_active = 1,
+           updated_at = excluded.updated_at`,
+      ).bind(item.id, userId, item.label, item.behavior, item.behavior === 'interval' ? item.intervalDays : 0, index, now, now),
     )
   })
 

@@ -492,14 +492,24 @@ export default function JournalPage() {
 
     async function loadDay() {
       try {
-        const data = await apiRequest(`/api/journal/${dateKey}`)
+        const [data, templates] = await Promise.all([
+          apiRequest(`/api/journal/${dateKey}`),
+          apiRequest('/api/templates'),
+        ])
         if (!active) return
         data.entry = hydrateGuidedEntry(data.entry)
         data.todayTasks = hydrateTodayTasks(data.todayTasks)
         setJournal(data)
-        setRoutineDraft(data.routines.map(({ id, label }) => ({ id, label })))
+        setRoutineDraft(
+          templates.routines.map(({ id, label, behavior, interval_days }) => ({
+            id,
+            label,
+            behavior,
+            intervalDays: interval_days || 7,
+          })),
+        )
         setTodoDraft(
-          data.todos.map(({ id, label, behavior, interval_days }) => ({
+          templates.todos.map(({ id, label, behavior, interval_days }) => ({
             id,
             label,
             behavior,
@@ -957,9 +967,12 @@ export default function JournalPage() {
 
             <div className="mt-5 space-y-3">
               {journal.routines.length ? journal.routines.map((item) => (
-                <div className="flex items-center justify-between gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm" key={item.id}>
-                  <span className="text-sm text-[var(--color-ink)]">{item.label}</span>
+                <div className="flex items-center gap-3 rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 shadow-sm" key={item.id}>
                   <StatusButtons onChange={(status) => setListStatus('routines', item.id, status)} status={item.status} />
+                  <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                    <span className="text-sm text-[var(--color-ink)]">{item.label}</span>
+                    <span className="rounded-full bg-[var(--color-sage-100)] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted)]">{taskLabel(item)}</span>
+                  </div>
                 </div>
               )) : <p className="rounded-2xl bg-[color:var(--theme-surface)] px-4 py-3 text-sm text-[var(--color-muted)]">No saved routine yet. Add one below.</p>}
             </div>
@@ -973,12 +986,13 @@ export default function JournalPage() {
             {showRoutineEditor ? (
               <TemplateEditor
                 items={routineDraft}
-                onAdd={() => setRoutineDraft((current) => [...current, { id: crypto.randomUUID(), label: '' }])}
+                onAdd={() => setRoutineDraft((current) => [...current, { id: crypto.randomUUID(), label: '', behavior: 'daily', intervalDays: 7 }])}
                 onChange={(index, field, value) => updateDraft(setRoutineDraft, index, field, value)}
                 onRemove={(index) => setRoutineDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
                 onReorder={(items) => setRoutineDraft(items)}
                 onSave={() => saveTemplates('routine')}
                 saving={templateBusy}
+                taskMode
               />
             ) : null}
           </Section>

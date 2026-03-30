@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS routine_items (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   label TEXT NOT NULL,
+  behavior TEXT NOT NULL DEFAULT 'daily',
+  interval_days INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
