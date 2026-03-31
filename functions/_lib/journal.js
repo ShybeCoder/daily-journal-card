@@ -253,13 +253,14 @@ function weekdayNumber(dateKey) {
   return new Date(`${dateKey}T12:00:00`).getDay()
 }
 
+function nextWeekdayOnOrAfter(startDate, weekday) {
+  const offset = (weekday - weekdayNumber(startDate) + 7) % 7
+  return addDays(startDate, offset)
+}
+
 function scheduledTaskDate(todo, baseDate, dateKey) {
   if (!baseDate || dateKey < baseDate) {
     return false
-  }
-
-  if (todo.behavior === 'weekday') {
-    return weekdayNumber(dateKey) === Number(todo.weekday)
   }
 
   if (todo.behavior === 'weekly') {
@@ -286,9 +287,22 @@ function taskState(item, history, currentChecks, dateKey, checkField = 'todoChec
   }
 
   if (item.behavior === 'weekday') {
+    const lastDone = history.find(
+      (row) => normalizeCheckStatus(row[checkField]?.[item.id]) === 'done',
+    )
+    const activationDate = lastDone
+      ? addDays(lastDone.entryDate, 1)
+      : item.created_at.slice(0, 10)
+
+    if (!activationDate || dateKey < activationDate) {
+      return { status: null, isVisible: false }
+    }
+
+    const nextDueDate = nextWeekdayOnOrAfter(activationDate, Number(item.weekday))
+
     return {
       status: null,
-      isVisible: scheduledTaskDate(item, item.created_at.slice(0, 10), dateKey),
+      isVisible: nextDueDate <= dateKey,
     }
   }
 
