@@ -249,9 +249,17 @@ function occursOnDate(event, dateKey) {
   return event.event_date === dateKey
 }
 
+function weekdayNumber(dateKey) {
+  return new Date(`${dateKey}T12:00:00`).getDay()
+}
+
 function scheduledTaskDate(todo, baseDate, dateKey) {
   if (!baseDate || dateKey < baseDate) {
     return false
+  }
+
+  if (todo.behavior === 'weekday') {
+    return weekdayNumber(dateKey) === Number(todo.weekday)
   }
 
   if (todo.behavior === 'weekly') {
@@ -275,6 +283,13 @@ function taskState(item, history, currentChecks, dateKey, checkField = 'todoChec
 
   if (currentStatus) {
     return { status: currentStatus, isVisible: true }
+  }
+
+  if (item.behavior === 'weekday') {
+    return {
+      status: null,
+      isVisible: scheduledTaskDate(item, item.created_at.slice(0, 10), dateKey),
+    }
   }
 
   const lastAction = history.find((row) => normalizeCheckStatus(row[checkField]?.[item.id]))
@@ -376,12 +391,12 @@ export function isMonthKey(value) {
 export async function ensureSeedData(context, userId) {
   const [routineRows, todoRows] = await Promise.all([
     context.env.DB.prepare(
-      `SELECT id, label, behavior, interval_days, created_at FROM routine_items
+      `SELECT id, label, behavior, weekday, interval_days, created_at FROM routine_items
        WHERE user_id = ? AND is_active = 1
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
     context.env.DB.prepare(
-      `SELECT id, label, behavior, interval_days, created_at FROM todo_items
+      `SELECT id, label, behavior, weekday, interval_days, created_at FROM todo_items
        WHERE user_id = ? AND is_active = 1
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
@@ -420,12 +435,12 @@ export async function getTemplates(context, userId) {
 
   const [routines, todos] = await Promise.all([
     context.env.DB.prepare(
-      `SELECT id, label, behavior, interval_days, created_at FROM routine_items
+      `SELECT id, label, behavior, weekday, interval_days, created_at FROM routine_items
        WHERE user_id = ? AND is_active = 1
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
     context.env.DB.prepare(
-      `SELECT id, label, behavior, interval_days, created_at FROM todo_items
+      `SELECT id, label, behavior, weekday, interval_days, created_at FROM todo_items
        WHERE user_id = ? AND is_active = 1
        ORDER BY sort_order ASC, created_at ASC`,
     ).bind(userId).all(),
@@ -605,7 +620,8 @@ export async function saveTemplates(context, userId, payload) {
     .map((item) => ({
       id: item.id || crypto.randomUUID(),
       label: trimText(item.label, 160).trim(),
-      behavior: ['daily', 'weekly', 'monthly', 'interval'].includes(item.behavior) ? item.behavior : 'daily',
+      behavior: ['daily', 'weekly', 'monthly', 'interval', 'weekday'].includes(item.behavior) ? item.behavior : 'daily',
+      weekday: Number.isInteger(Number(item.weekday)) ? Number(item.weekday) : -1,
       intervalDays: Math.max(1, Number.parseInt(item.intervalDays, 10) || 7),
     }))
     .filter((item) => item.label)
@@ -613,7 +629,8 @@ export async function saveTemplates(context, userId, payload) {
     .map((item) => ({
       id: item.id || crypto.randomUUID(),
       label: trimText(item.label, 160).trim(),
-      behavior: ['daily', 'weekly', 'monthly', 'interval'].includes(item.behavior) ? item.behavior : 'daily',
+      behavior: ['daily', 'weekly', 'monthly', 'interval', 'weekday'].includes(item.behavior) ? item.behavior : 'daily',
+      weekday: Number.isInteger(Number(item.weekday)) ? Number(item.weekday) : -1,
       intervalDays: Math.max(1, Number.parseInt(item.intervalDays, 10) || 7),
     }))
     .filter((item) => item.label)
@@ -631,32 +648,54 @@ export async function saveTemplates(context, userId, payload) {
   routines.forEach((item, index) => {
     statements.push(
       context.env.DB.prepare(
-        `INSERT INTO routine_items (id, user_id, label, behavior, interval_days, sort_order, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+        `INSERT INTO routine_items (id, user_id, label, behavior, weekday, interval_days, sort_order, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            label = excluded.label,
            behavior = excluded.behavior,
+           weekday = excluded.weekday,
            interval_days = excluded.interval_days,
            sort_order = excluded.sort_order,
            is_active = 1,
            updated_at = excluded.updated_at`,
-      ).bind(item.id, userId, item.label, item.behavior, item.behavior === 'interval' ? item.intervalDays : 0, index, now, now),
+      ).bind(
+        item.id,
+        userId,
+        item.label,
+        item.behavior,
+        item.behavior === 'weekday' ? item.weekday : -1,
+        item.behavior === 'interval' ? item.intervalDays : 0,
+        index,
+        now,
+        now,
+      ),
     )
   })
 
   todos.forEach((item, index) => {
     statements.push(
       context.env.DB.prepare(
-        `INSERT INTO todo_items (id, user_id, label, behavior, interval_days, sort_order, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+        `INSERT INTO todo_items (id, user_id, label, behavior, weekday, interval_days, sort_order, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            label = excluded.label,
            behavior = excluded.behavior,
+           weekday = excluded.weekday,
            interval_days = excluded.interval_days,
            sort_order = excluded.sort_order,
            is_active = 1,
            updated_at = excluded.updated_at`,
-      ).bind(item.id, userId, item.label, item.behavior, item.behavior === 'interval' ? item.intervalDays : 0, index, now, now),
+      ).bind(
+        item.id,
+        userId,
+        item.label,
+        item.behavior,
+        item.behavior === 'weekday' ? item.weekday : -1,
+        item.behavior === 'interval' ? item.intervalDays : 0,
+        index,
+        now,
+        now,
+      ),
     )
   })
 

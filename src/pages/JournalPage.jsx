@@ -62,6 +62,15 @@ const GUIDED_LIST_FIELDS = [
   'selfCare',
   'ailments',
 ]
+const WEEKDAY_OPTIONS = [
+  { value: 0, label: 'Every Sunday' },
+  { value: 1, label: 'Every Monday' },
+  { value: 2, label: 'Every Tuesday' },
+  { value: 3, label: 'Every Wednesday' },
+  { value: 4, label: 'Every Thursday' },
+  { value: 5, label: 'Every Friday' },
+  { value: 6, label: 'Every Saturday' },
+]
 
 function withTrailingBlankTask(tasks) {
   const next = Array.isArray(tasks) ? tasks.filter((task) => task.label || task.status) : []
@@ -156,6 +165,9 @@ function mealHasContent(meal) {
 }
 
 function taskLabel(task) {
+  if (task.behavior === 'weekday') {
+    return WEEKDAY_OPTIONS.find((option) => option.value === Number(task.weekday))?.label || 'Every weekday'
+  }
   if (task.behavior === 'interval') return `Every ${task.interval_days} days`
   if (task.behavior === 'weekly') return 'Every 7 days'
   if (task.behavior === 'monthly') return 'Monthly'
@@ -168,14 +180,28 @@ function SortableTemplateItem({ index, item, onChange, onRemove, registerRef, ta
     transform: CSS.Transform.toString(transform),
     transition,
   }
+  const taskModeValue =
+    item.behavior === 'weekday'
+      ? `weekday-${Number.isInteger(Number(item.weekday)) ? Number(item.weekday) : 1}`
+      : item.behavior
+
+  function handleTaskModeChange(value) {
+    if (value.startsWith('weekday-')) {
+      onChange(index, 'behavior', 'weekday')
+      onChange(index, 'weekday', value.replace('weekday-', ''))
+      return
+    }
+
+    onChange(index, 'behavior', value)
+  }
 
   return (
     <div
       className={`grid gap-3 ${
         taskMode
           ? item.behavior === 'interval'
-            ? 'lg:grid-cols-[40px_1fr_170px_130px_44px]'
-            : 'lg:grid-cols-[40px_1fr_170px_44px]'
+            ? 'lg:grid-cols-[40px_1fr_220px_130px_44px]'
+            : 'lg:grid-cols-[40px_1fr_220px_44px]'
           : 'lg:grid-cols-[40px_1fr_44px]'
       }`}
       ref={setNodeRef}
@@ -198,11 +224,16 @@ function SortableTemplateItem({ index, item, onChange, onRemove, registerRef, ta
       />
       {taskMode ? (
         <>
-          <select className={INPUT} onChange={(event) => onChange(index, 'behavior', event.target.value)} value={item.behavior}>
+          <select className={INPUT} onChange={(event) => handleTaskModeChange(event.target.value)} value={taskModeValue}>
             <option value="daily">Daily task</option>
             <option value="weekly">Every 7 days</option>
             <option value="monthly">Monthly task</option>
             <option value="interval">Every ___ days</option>
+            {WEEKDAY_OPTIONS.map((option) => (
+              <option key={option.value} value={`weekday-${option.value}`}>
+                {option.label}
+              </option>
+            ))}
           </select>
           {item.behavior === 'interval' ? (
             <input
@@ -501,18 +532,20 @@ export default function JournalPage() {
         data.todayTasks = hydrateTodayTasks(data.todayTasks)
         setJournal(data)
         setRoutineDraft(
-          templates.routines.map(({ id, label, behavior, interval_days }) => ({
+          templates.routines.map(({ id, label, behavior, weekday, interval_days }) => ({
             id,
             label,
             behavior,
+            weekday: weekday ?? -1,
             intervalDays: interval_days || 7,
           })),
         )
         setTodoDraft(
-          templates.todos.map(({ id, label, behavior, interval_days }) => ({
+          templates.todos.map(({ id, label, behavior, weekday, interval_days }) => ({
             id,
             label,
             behavior,
+            weekday: weekday ?? -1,
             intervalDays: interval_days || 7,
           })),
         )
@@ -986,7 +1019,7 @@ export default function JournalPage() {
             {showRoutineEditor ? (
               <TemplateEditor
                 items={routineDraft}
-                onAdd={() => setRoutineDraft((current) => [...current, { id: crypto.randomUUID(), label: '', behavior: 'daily', intervalDays: 7 }])}
+                onAdd={() => setRoutineDraft((current) => [...current, { id: crypto.randomUUID(), label: '', behavior: 'daily', weekday: -1, intervalDays: 7 }])}
                 onChange={(index, field, value) => updateDraft(setRoutineDraft, index, field, value)}
                 onRemove={(index) => setRoutineDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
                 onReorder={(items) => setRoutineDraft(items)}
@@ -1022,7 +1055,7 @@ export default function JournalPage() {
             {showTodoEditor ? (
               <TemplateEditor
                 items={todoDraft}
-                onAdd={() => setTodoDraft((current) => [...current, { id: crypto.randomUUID(), label: '', behavior: 'daily', intervalDays: 7 }])}
+                onAdd={() => setTodoDraft((current) => [...current, { id: crypto.randomUUID(), label: '', behavior: 'daily', weekday: -1, intervalDays: 7 }])}
                 onChange={(index, field, value) => updateDraft(setTodoDraft, index, field, value)}
                 onRemove={(index) => setTodoDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
                 onReorder={(items) => setTodoDraft(items)}
