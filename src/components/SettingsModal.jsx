@@ -4,6 +4,7 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -97,6 +98,15 @@ function SectionMessage({ error, message }) {
   )
 }
 
+function buildThemeSnapshot(theme, presets) {
+  const preset = presets[theme?.preset] ?? presets.light
+  return {
+    mode: theme?.mode === 'custom' ? 'custom' : 'preset',
+    preset: theme?.preset ?? 'light',
+    custom: theme?.mode === 'custom' ? { ...preset, ...(theme.custom ?? {}) } : preset,
+  }
+}
+
 export default function SettingsModal() {
   const {
     changePassword,
@@ -110,6 +120,7 @@ export default function SettingsModal() {
     presetLabels,
     presets,
     resolvedTheme,
+    savedThemes,
     saveTheme,
     settingsOpen,
     themeState,
@@ -117,6 +128,9 @@ export default function SettingsModal() {
 
   const [draft, setDraft] = useState(themeState)
   const [themeBusy, setThemeBusy] = useState(false)
+  const [themeLibraryName, setThemeLibraryName] = useState('')
+  const [themeLibraryError, setThemeLibraryError] = useState('')
+  const [themeLibraryMessage, setThemeLibraryMessage] = useState('')
   const [passwordForm, setPasswordForm] = useState({
     newPassword: '',
     confirmPassword: '',
@@ -143,6 +157,9 @@ export default function SettingsModal() {
     }
 
     setDraft(themeState)
+    setThemeLibraryName('')
+    setThemeLibraryError('')
+    setThemeLibraryMessage('')
     setPasswordForm({ newPassword: '', confirmPassword: '' })
     setPasswordError('')
     setPasswordMessage('')
@@ -191,9 +208,81 @@ export default function SettingsModal() {
 
   async function handleThemeSave() {
     setThemeBusy(true)
+    setThemeLibraryError('')
+    setThemeLibraryMessage('')
     try {
-      await saveTheme(draft)
+      await saveTheme(draft, savedThemes)
       closeSettings()
+    } finally {
+      setThemeBusy(false)
+    }
+  }
+
+  async function handleSaveUserTheme() {
+    const name = themeLibraryName.trim()
+    if (!name) {
+      setThemeLibraryError('Give your theme a name first.')
+      setThemeLibraryMessage('')
+      return
+    }
+
+    setThemeBusy(true)
+    setThemeLibraryError('')
+    setThemeLibraryMessage('')
+
+    const nextSavedThemes = [
+      ...savedThemes.filter((item) => item.name.toLowerCase() !== name.toLowerCase()),
+      {
+        id: crypto.randomUUID(),
+        name,
+        theme: buildThemeSnapshot(draft, presets),
+      },
+    ]
+
+    try {
+      await saveTheme(draft, nextSavedThemes)
+      setThemeLibraryName('')
+      setThemeLibraryMessage('Theme saved to your collection.')
+    } catch (saveError) {
+      setThemeLibraryError(saveError.message)
+    } finally {
+      setThemeBusy(false)
+    }
+  }
+
+  async function handleApplyUserTheme(savedTheme) {
+    const nextDraft = {
+      mode: savedTheme.theme.mode,
+      preset: savedTheme.theme.preset,
+      custom: savedTheme.theme.custom,
+    }
+
+    setThemeBusy(true)
+    setThemeLibraryError('')
+    setThemeLibraryMessage('')
+
+    try {
+      setDraft(nextDraft)
+      await saveTheme(nextDraft, savedThemes)
+      setThemeLibraryMessage(`Now using ${savedTheme.name}.`)
+    } catch (saveError) {
+      setThemeLibraryError(saveError.message)
+    } finally {
+      setThemeBusy(false)
+    }
+  }
+
+  async function handleDeleteUserTheme(id) {
+    setThemeBusy(true)
+    setThemeLibraryError('')
+    setThemeLibraryMessage('')
+
+    try {
+      const nextSavedThemes = savedThemes.filter((item) => item.id !== id)
+      await saveTheme(draft, nextSavedThemes)
+      setThemeLibraryMessage('Theme deleted.')
+    } catch (saveError) {
+      setThemeLibraryError(saveError.message)
     } finally {
       setThemeBusy(false)
     }
@@ -491,6 +580,90 @@ export default function SettingsModal() {
                     </div>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-[var(--color-sage-200)] bg-[var(--theme-panel)] p-5">
+              <div className="flex items-center gap-3">
+                <Paintbrush className="h-5 w-5 text-[var(--color-sage-600)]" />
+                <p className="font-display text-3xl text-[var(--color-ink)]">
+                  Your themes
+                </p>
+              </div>
+              <p className="mt-2 text-sm text-[var(--color-muted)]">
+                Save your custom looks with names so you can switch back anytime.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                <input
+                  className="w-full rounded-2xl border border-[var(--color-sage-200)] bg-white px-4 py-3 text-base text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-sage-500)] focus:outline-none focus:ring-4 focus:ring-[color:rgba(90,111,87,0.15)]"
+                  onChange={(event) => setThemeLibraryName(event.target.value)}
+                  placeholder="Name this theme"
+                  value={themeLibraryName}
+                />
+                <button
+                  className="inline-flex items-center justify-center rounded-full bg-[var(--color-sage-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-sage-700)] disabled:opacity-70"
+                  disabled={themeBusy}
+                  onClick={handleSaveUserTheme}
+                  type="button"
+                >
+                  Save custom theme
+                </button>
+              </div>
+              <SectionMessage error={themeLibraryError} message={themeLibraryMessage} />
+              <div className="mt-4 space-y-3">
+                {savedThemes.length ? (
+                  savedThemes.map((savedTheme) => (
+                    <div
+                      className="rounded-2xl bg-white/75 px-4 py-3"
+                      key={savedTheme.id}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-[var(--color-ink)]">
+                            {savedTheme.name}
+                          </p>
+                          <div className="mt-2 flex gap-2">
+                            {[
+                              savedTheme.theme.custom.background,
+                              savedTheme.theme.custom.surface,
+                              savedTheme.theme.custom.primary,
+                              savedTheme.theme.custom.accent,
+                            ].map((color) => (
+                              <span
+                                className="h-5 w-5 rounded-full border border-black/10"
+                                key={color}
+                                style={{ backgroundColor: color }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button
+                            className="rounded-full bg-[var(--color-sage-600)] px-3 py-2 text-xs font-medium text-white transition hover:bg-[var(--color-sage-700)] disabled:opacity-70"
+                            disabled={themeBusy}
+                            onClick={() => handleApplyUserTheme(savedTheme)}
+                            type="button"
+                          >
+                            Use theme
+                          </button>
+                          <button
+                            className="inline-flex items-center gap-2 rounded-full bg-[var(--color-rose-100)] px-3 py-2 text-xs font-medium text-[var(--color-ink)] transition hover:bg-[var(--color-rose-200)] disabled:opacity-70"
+                            disabled={themeBusy}
+                            onClick={() => handleDeleteUserTheme(savedTheme.id)}
+                            type="button"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl bg-white/75 px-4 py-3 text-sm text-[var(--color-muted)]">
+                    No user-made themes saved yet.
+                  </div>
+                )}
               </div>
             </div>
 

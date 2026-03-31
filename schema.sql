@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   theme_mode TEXT NOT NULL DEFAULT 'preset',
   theme_preset TEXT NOT NULL DEFAULT 'light',
   theme_config TEXT NOT NULL DEFAULT '{}',
+  custom_themes TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

@@ -98,6 +98,14 @@ function resolveTheme(theme) {
   return theme?.mode === 'custom' ? { ...preset, ...(theme.custom ?? {}) } : preset
 }
 
+function normalizeThemePayload(theme) {
+  return {
+    mode: theme?.mode === 'custom' ? 'custom' : 'preset',
+    preset: theme?.preset ?? 'light',
+    custom: resolveTheme(theme),
+  }
+}
+
 function applyTheme(theme) {
   const root = document.documentElement
   const vars = {
@@ -141,6 +149,7 @@ export function ThemeProvider({ children }) {
     preset: 'light',
     custom: PRESETS.light,
   })
+  const [savedThemes, setSavedThemes] = useState([])
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => {
@@ -157,17 +166,20 @@ export function ThemeProvider({ children }) {
           preset: 'light',
           custom: PRESETS.light,
         })
+        setSavedThemes([])
         return
       }
 
       try {
         const data = await apiRequest('/api/settings')
         if (active) {
-          setThemeState({
+          const nextTheme = {
             mode: data.theme.mode,
             preset: data.theme.preset,
             custom: { ...(PRESETS[data.theme.preset] ?? PRESETS.light), ...data.theme.custom },
-          })
+          }
+          setThemeState(nextTheme)
+          setSavedThemes(data.savedThemes ?? [])
         }
       } catch {
         if (active) {
@@ -176,6 +188,7 @@ export function ThemeProvider({ children }) {
             preset: 'light',
             custom: PRESETS.light,
           })
+          setSavedThemes([])
         }
       }
     }
@@ -187,8 +200,9 @@ export function ThemeProvider({ children }) {
     }
   }, [isAuthenticated])
 
-  async function saveTheme(nextTheme) {
+  async function saveTheme(nextTheme, nextSavedThemes = savedThemes) {
     setThemeState(nextTheme)
+    setSavedThemes(nextSavedThemes)
 
     if (!isAuthenticated) {
       return
@@ -196,7 +210,10 @@ export function ThemeProvider({ children }) {
 
     await apiRequest('/api/settings', {
       method: 'PUT',
-      body: JSON.stringify({ theme: nextTheme }),
+      body: JSON.stringify({
+        theme: normalizeThemePayload(nextTheme),
+        savedThemes: nextSavedThemes,
+      }),
     })
   }
 
@@ -204,6 +221,7 @@ export function ThemeProvider({ children }) {
     presets: PRESETS,
     presetLabels: PRESET_LABELS,
     themeState,
+    savedThemes,
     resolvedTheme: resolveTheme(themeState),
     settingsOpen,
     openSettings: () => setSettingsOpen(true),
